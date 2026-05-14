@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Poop Savvy — Routes</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#0ea5e9">
+<link rel="stylesheet" href="app.css">
+<style>
+  .date-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    flex-wrap: wrap; margin-bottom: 14px;
+  }
+  .date-pick { display: flex; align-items: center; gap: 6px; }
+  .date-pick input[type=date] {
+    padding: 9px 12px; border: 1px solid var(--border-strong);
+    border-radius: 8px; font-size: 14px; background: #fff;
+  }
+  .progress-card {
+    background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+    color: #fff; border-radius: var(--radius); padding: 16px 20px;
+    margin-bottom: 14px;
+    box-shadow: 0 8px 24px rgba(14,165,233,0.22);
+  }
+  .progress-card .top {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 13px; margin-bottom: 10px;
+  }
+  .progress-card .pct { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; }
+  .progress-track {
+    height: 10px; background: rgba(255,255,255,0.25); border-radius: 999px; overflow: hidden;
+  }
+  .progress-val { height: 100%; background: #fff; border-radius: 999px; transition: width 0.5s; }
+
+  .zone { margin-bottom: 14px; }
+  .zone-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 16px; background: var(--accent-50);
+    border-radius: 10px; margin-bottom: 8px;
+    font-size: 13px; font-weight: 700; color: var(--accent-600);
+  }
+  .zone-head .ct {
+    background: #fff; color: var(--accent-600);
+    font-size: 10px; padding: 3px 8px; border-radius: 999px;
+    margin-left: 8px; font-weight: 700;
+  }
+  .stops { display: flex; flex-direction: column; gap: 8px; }
+  .stop {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 14px;
+    display: grid; grid-template-columns: 32px 48px 1fr auto; gap: 12px;
+    align-items: center;
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  .stop:hover { box-shadow: var(--shadow); }
+  .stop.done { background: var(--green-50); border-color: #a7f3d0; }
+  .stop.done .name { text-decoration: line-through; color: var(--text-muted); }
+  .stop-reorder { display: flex; flex-direction: column; gap: 3px; }
+  .stop-reorder button {
+    background: var(--accent-50); border: 0;
+    color: var(--accent-600);
+    width: 26px; height: 22px; border-radius: 5px;
+    font-weight: 700; font-size: 12px; cursor: pointer;
+  }
+  .stop-num {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    font-weight: 800; font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .stop.done .stop-num { background: var(--green); }
+  .stop.enroute .stop-num { background: var(--amber); }
+  .stop.arrived .stop-num { background: var(--purple); }
+  .stop .name { font-weight: 700; font-size: 14px; color: var(--text); }
+  .stop .addr { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .stop .tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+  .tag {
+    font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px;
+  }
+  .tag-blue { background: #dbeafe; color: #1e40af; }
+  .tag-purple { background: var(--purple-50); color: var(--purple-700); }
+  .tag-amber { background: var(--amber-50); color: var(--amber-700); }
+  .tag-green { background: var(--green-50); color: var(--green-700); }
+  .stop-actions { display: flex; flex-direction: column; gap: 5px; }
+  .act-btn {
+    font-size: 11px; padding: 5px 10px; border-radius: 6px;
+    border: 1px solid; background: #fff; font-weight: 700; cursor: pointer;
+  }
+  .act-btn.complete { color: var(--green-700); border-color: #a7f3d0; }
+  .act-btn.complete:hover { background: #d1fae5; }
+  .act-btn.undo { color: var(--text-muted); border-color: var(--border-strong); }
+  .act-btn.view { color: var(--purple-700); border-color: #ddd6fe; }
+  .act-btn.view:hover { background: var(--purple-50); }
+  .act-btn.maps { color: var(--accent); border-color: var(--accent-100); }
+  .act-btn.maps:hover { background: var(--accent-50); }
+  @media (max-width: 560px) {
+    .stop { grid-template-columns: 24px 40px 1fr; }
+    .stop-actions { grid-column: 2 / -1; flex-direction: row; flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body data-page="routes">
+<nav class="app-nav" id="app-nav"></nav>
+
+<div class="container">
+  <div class="page-title">
+    <div><h1>Today's Route</h1><div class="sub" id="sub">Grouped by zip, ordered from home base</div></div>
+    <div class="page-actions">
+      <button class="btn btn-ghost" onclick="shift(-1)">‹ Prev</button>
+      <button class="btn btn-ghost" onclick="goToday()">Today</button>
+      <button class="btn btn-ghost" onclick="shift(1)">Next ›</button>
+      <button class="btn btn-primary" onclick="openAllMaps()">🗺️ All Stops in Maps</button>
+    </div>
+  </div>
+
+  <div class="date-row">
+    <div class="date-pick">
+      <label style="font-size:12px;color:var(--text-muted);font-weight:600;">Date:</label>
+      <input type="date" id="route-date" onchange="loadRoute()">
+    </div>
+    <select id="tech-filter" onchange="renderRoute()" style="padding:9px 12px;border:1px solid var(--border-strong);border-radius:8px;font-size:14px;background:#fff;">
+      <option value="all">All Techs</option>
+      <option>Josh</option><option>Dee</option><option>Drake</option>
+    </select>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi accent"><div class="kpi-label">Stops</div><div class="kpi-val" id="s-total">—</div></div>
+    <div class="kpi green"><div class="kpi-label">Completed</div><div class="kpi-val" id="s-done">—</div></div>
+    <div class="kpi amber"><div class="kpi-label">Remaining</div><div class="kpi-val" id="s-remaining">—</div></div>
+    <div class="kpi purple"><div class="kpi-label">Zones</div><div class="kpi-val" id="s-zones">—</div></div>
+  </div>
+
+  <div class="progress-card" id="progress-wrap" style="display:none;">
+    <div class="top">
+      <span id="progress-text">—</span>
+      <span class="pct" id="progress-pct">0%</span>
+    </div>
+    <div class="progress-track"><div class="progress-val" id="progress-fill" style="width:0%"></div></div>
+  </div>
+
+  <div id="route-content"><div class="loading">Loading route…</div></div>
+</div>
+
+<nav class="tab-bar" id="tab-bar"></nav>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="app.js"></script>
+<script>
+  let routeVisits = [];
+  const HOME_ZIP = "75115"; // DeSoto
+  function distFromZip(z) {
+    if (!z) return 999;
+    if (z === HOME_ZIP) return 0;
+    // simple proximity within 751xx
+    const n = parseInt((z+"").slice(2,5)) || 0;
+    const home = parseInt(HOME_ZIP.slice(2,5)) || 0;
+    return Math.abs(n - home);
+  }
+
+  function goToday() { document.getElementById("route-date").value = PS.fmt.today(); loadRoute(); }
+  function shift(dir) {
+    const i = document.getElementById("route-date");
+    i.value = PS.fmt.addDateDays(i.value, dir);
+    loadRoute();
+  }
+
+  async function loadRoute() {
+    const date = document.getElementById("route-date").value;
+    if (!date) return;
+    document.getElementById("route-content").innerHTML = `<div class="loading">Loading route…</div>`;
+    try {
+      const data = await PS.api.select("schedules", `scheduled_date=eq.${date}&select=*,customers(name,address,city,zip,dogs_count,service_frequency,gate_code,assigned_tech)&order=status.asc`);
+      routeVisits = (data||[])
+        .filter(v => v.status !== "Cancelled")
+        .sort((a, b) => {
+          if (a.status === "Completed" && b.status !== "Completed") return 1;
+          if (a.status !== "Completed" && b.status === "Completed") return -1;
+          const za = a.customers?.zip || "zzz";
+          const zb = b.customers?.zip || "zzz";
+          return za.localeCompare(zb);
+        });
+      renderRoute();
+    } catch (e) {
+      document.getElementById("route-content").innerHTML = `<div class="empty" style="padding:2rem;">Could not load route.</div>`;
+    }
+  }
+
+  function renderRoute() {
+    const techFilter = document.getElementById("tech-filter").value;
+    let visits = routeVisits.slice();
+    if (techFilter && techFilter !== "all") {
+      const tf = techFilter.toLowerCase();
+      // Per-visit override (schedules.tech_name) wins; otherwise fall back
+      // to the customer's master assignment (customers.assigned_tech).
+      visits = visits.filter(v => {
+        const n = (v.tech_name || v.customers?.assigned_tech || "").toLowerCase();
+        return n === tf;
+      });
+    }
+
+    // Stats
+    const total = visits.length;
+    const done = visits.filter(v => v.status === "Completed").length;
+    const zones = new Set(visits.map(v => v.customers?.zip || "—")).size;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    document.getElementById("s-total").textContent = total;
+    document.getElementById("s-done").textContent = done;
+    document.getElementById("s-remaining").textContent = total - done;
+    document.getElementById("s-zones").textContent = zones;
+    document.getElementById("progress-text").textContent = `${done} of ${total} complete`;
+    document.getElementById("progress-pct").textContent = pct + "%";
+    document.getElementById("progress-fill").style.width = pct + "%";
+    document.getElementById("progress-wrap").style.display = total ? "" : "none";
+
+    if (!total) {
+      document.getElementById("route-content").innerHTML = `<div class="empty" style="padding:3rem;"><div class="empty-title">No stops today 🎉</div><div>Enjoy the break.</div></div>`;
+      return;
+    }
+
+    // Group by zip
+    const zonesMap = {};
+    visits.forEach((v, idx) => {
+      const zip = v.customers?.zip || "No Zip";
+      if (!zonesMap[zip]) zonesMap[zip] = { zip: zip, city: (v.customers && v.customers.city) || "", visits: [] };
+      zonesMap[zip].visits.push(Object.assign({}, v, { _idx: idx }));
+    });
+    const sortedZones = Object.values(zonesMap).sort((a, b) => distFromZip(a.zip) - distFromZip(b.zip));
+
+    let stopNum = 1;
+    const html = sortedZones.map(zone => {
+      const zoneDone = zone.visits.filter(v => v.status === "Completed").length;
+      const zoneAllDone = zoneDone === zone.visits.length;
+      const mapsQuery = zone.visits
+        .filter(v => v.customers?.address)
+        .map(v => encodeURIComponent(`${v.customers.address}, ${v.customers.city||"DeSoto"}, TX`))
+        .join("/");
+      const mapsUrl = mapsQuery ? `https://www.google.com/maps/dir/${mapsQuery}` : null;
+
+      let stopsHtml = zone.visits.map(v => {
+        const c = v.customers || {};
+        const done = v.status === "Completed";
+        const enroute = v.status === "En Route";
+        const arrived = v.status === "Arrived";
+        const address = [c.address, c.city, "TX"].filter(Boolean).join(", ");
+        const mapsLink = c.address
+          ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}` : null;
+        const dogs = c.dogs_count || 1;
+        const num = done ? "✓" : stopNum;
+        if (!done) stopNum++;
+        return `<div class="stop ${done?"done":""}${enroute?" enroute":""}${arrived?" arrived":""}">
+          <div class="stop-reorder">
+            <button onclick="moveStop('${v.id}',-1)">↑</button>
+            <button onclick="moveStop('${v.id}',1)">↓</button>
+          </div>
+          <div class="stop-num">${num}</div>
+          <div>
+            <div class="name">${PS.fmt.escape(c.name||"—")}</div>
+            <div class="addr">${PS.fmt.escape(address||"No address on file")}</div>
+            <div class="tags">
+              <span class="tag tag-blue">🐕 ${dogs} dog${dogs>1?"s":""}</span>
+              ${c.service_frequency ? `<span class="tag tag-purple">${PS.fmt.escape(c.service_frequency)}</span>` : ""}
+              ${c.gate_code ? `<span class="tag tag-amber">🔑 ${PS.fmt.escape(c.gate_code)}</span>` : ""}
+              ${enroute ? `<span class="tag tag-amber">🚗 En Route</span>` : ""}
+              ${arrived ? `<span class="tag tag-purple">📍 Arrived</span>` : ""}
+              ${done ? `<span class="tag tag-green">✓ Done</span>` : ""}
+            </div>
+            ${v.notes?`<div class="text-sm muted mt-1">📝 ${PS.fmt.escape(v.notes)}</div>`:""}
+          </div>
+          <div class="stop-actions">
+            ${v.status === "Scheduled" ? `<button class="act-btn complete" onclick="markDone('${v.id}')">✓ Done</button>` : ""}
+            ${done ? `<button class="act-btn undo" onclick="markUndo('${v.id}')">↩ Undo</button>` : ""}
+            <button class="act-btn view" onclick="window.location='job-detail.html?id=${v.id}&from=routes'">View</button>
+            ${mapsLink ? `<button class="act-btn maps" onclick="window.open('${mapsLink}','_blank')">🗺️</button>` : ""}
+          </div>
+        </div>`;
+      }).join("");
+
+      return `<div class="zone">
+        <div class="zone-head">
+          <div>📍 ${PS.fmt.escape(zone.city ? zone.city + " — " : "")}${PS.fmt.escape(zone.zip)}<span class="ct">${zone.visits.length}</span>${zoneAllDone?'<span style="color:var(--green-700);margin-left:8px;font-size:11px;">✓ Zone done</span>':''}</div>
+          ${mapsUrl ? `<button class="btn btn-secondary btn-sm" onclick="window.open('${mapsUrl}','_blank')">🗺️ Zone in Maps</button>` : ""}
+        </div>
+        <div class="stops">${stopsHtml}</div>
+      </div>`;
+    }).join("");
+
+    document.getElementById("route-content").innerHTML = html;
+  }
+
+  async function markDone(id) {
+    const nowIso = new Date().toISOString();
+    const today = PS.fmt.today();
+    const v = routeVisits.find(x => x.id === id);
+    try {
+      await PS.api.patch("schedules", `id=eq.${id}`, { status: "Completed", completed_date: today, completed_at: nowIso });
+      if (v) { v.status = "Completed"; v.completed_date = today; v.completed_at = nowIso; }
+      renderRoute();
+      PS.toast("✓ Stop complete");
+    } catch (e) { PS.toast("Update failed", "error"); }
+  }
+  async function markUndo(id) {
+    const v = routeVisits.find(x => x.id === id);
+    try {
+      await PS.api.patch("schedules", `id=eq.${id}`, { status: "Scheduled", completed_date: null });
+      if (v) { v.status = "Scheduled"; v.completed_date = null; }
+      renderRoute();
+      PS.toast("Reset to scheduled");
+    } catch (e) { PS.toast("Update failed", "error"); }
+  }
+
+  function moveStop(id, dir) {
+    const i = routeVisits.findIndex(v => v.id === id);
+    if (i < 0) return;
+    const j = i + dir;
+    if (j < 0 || j >= routeVisits.length) return;
+    [routeVisits[i], routeVisits[j]] = [routeVisits[j], routeVisits[i]];
+    renderRoute();
+  }
+
+  function openAllMaps() {
+    const remaining = routeVisits.filter(v => v.status !== "Completed" && v.customers?.address);
+    if (!remaining.length) return PS.toast("No remaining stops with addresses", "info");
+    const wp = remaining.map(v => encodeURIComponent(`${v.customers.address}, ${v.customers.city||"DeSoto"}, TX`)).join("/");
+    window.open(`https://www.google.com/maps/dir/${wp}`, "_blank");
+  }
+
+  // Populate tech dropdown from the roster and, in tech mode, lock it to the current tech.
+  function applyTechScope() {
+    const sel = document.getElementById("tech-filter");
+    if (!sel) return;
+    const roster = (PS.view?.roster?.() || ["Josh","Dee","Drake"]);
+    // Rebuild options so any new tech from admin_config is honored
+    const opts = ['<option value="all">All Techs</option>']
+      .concat(roster.map(n => `<option>${PS.fmt.escape(n)}</option>`));
+    sel.innerHTML = opts.join("");
+    if (PS.view?.isTech?.()) {
+      const t = PS.view.tech() || "";
+      // Make sure the current tech is an option even if missing from roster
+      if (t && !roster.includes(t)) {
+        sel.insertAdjacentHTML("beforeend", `<option>${PS.fmt.escape(t)}</option>`);
+      }
+      sel.value = t || "all";
+      sel.disabled = true;
+      sel.style.display = "none";
+      // Replace subtitle with tech-scoped text
+      const sub = document.getElementById("sub");
+      if (sub) sub.textContent = `Your stops — ${t || "tech"}`;
+    }
+  }
+
+  window.onAuthReady = () => {
+    applyTechScope();
+    document.getElementById("route-date").value = PS.fmt.today();
+    loadRoute();
+  };
+</script>
+</body>
+</html>

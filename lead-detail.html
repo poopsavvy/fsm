@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Poop Savvy — Lead</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#0ea5e9">
+<link rel="stylesheet" href="app.css">
+<style>
+  .detail-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 980px) { .detail-grid { grid-template-columns: 1fr; } }
+  .estimate-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .estimate-table td { padding: 10px 6px; border-bottom: 1px solid var(--border); }
+  .estimate-table tr.total td { background: #ecfdf5; border: 0; border-radius: 8px; font-weight: 800; font-size: 15px; color: var(--green-700); }
+  .estimate-table tr.total td:last-child { font-size: 18px; }
+  .tmpl-btn {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px; border-radius: 10px;
+    border: 1px solid var(--border-strong); background: var(--surface-2);
+    cursor: pointer; text-align: left; transition: all 0.15s;
+  }
+  .tmpl-btn:hover { border-color: var(--accent-100); background: var(--accent-50); }
+  .tmpl-btn.email { border-color: #a7f3d0; background: #f0fdf4; }
+  .tmpl-btn.email:hover { border-color: #6ee7b7; background: #dcfce7; }
+  .tmpl-icon { font-size: 22px; flex-shrink: 0; }
+  .tmpl-label { font-weight: 700; font-size: 13px; color: var(--text); }
+  .tmpl-preview {
+    font-size: 11px; color: var(--text-muted); margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  }
+  .sms-thread { display: flex; flex-direction: column; gap: 10px; max-height: 280px; overflow-y: auto; padding: 6px 0; }
+  .sms-bubble { max-width: 80%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.45; }
+  .sms-out { background: var(--accent); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .sms-in  { background: #f1f5f9; color: var(--text); align-self: flex-start; border-bottom-left-radius: 4px; }
+  .sms-time { font-size: 11px; opacity: 0.7; margin-top: 3px; }
+  .sms-compose { display: flex; gap: 8px; margin-top: 10px; }
+  .sms-compose textarea {
+    flex: 1; padding: 10px 12px; border: 1px solid var(--border-strong);
+    border-radius: 10px; font-size: 14px; outline: none; resize: none; font-family: inherit;
+  }
+  .sms-compose textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(14,165,233,0.15); }
+  .custom-label {
+    font-size: 11px; color: var(--text-faint); text-transform: uppercase;
+    letter-spacing: 0.06em; font-weight: 700; margin: 14px 0 6px;
+    padding-top: 12px; border-top: 1px solid var(--border);
+  }
+  .save-bar {
+    position: sticky; bottom: 12px;
+    background: #fff; border: 1px solid var(--border); border-radius: 14px;
+    padding: 10px 14px; display: flex; justify-content: flex-end; gap: 8px;
+    box-shadow: 0 10px 30px rgba(15,23,42,0.08);
+    margin-top: 18px;
+  }
+  @media (max-width: 768px) {
+    .save-bar { position: fixed; bottom: calc(var(--tabbar-h) + 8px); left: 12px; right: 12px; z-index: 30; }
+  }
+</style>
+</head>
+<body data-page="leads">
+<nav class="app-nav" id="app-nav"></nav>
+
+<div class="container" id="main">
+  <div class="loading">Loading lead…</div>
+</div>
+
+<nav class="tab-bar" id="tab-bar"></nav>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="app.js"></script>
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const leadId = params.get("id");
+  let lead = null;
+
+  // ── PRICING: matches the lead-specific tax calc used on the old CRM ──
+  function calcLeadPrice(dogs, freq) {
+    const monthly = PS.pricing.calcPrice(dogs, freq);
+    const tax = monthly * 0.0825;
+    const total = monthly + tax;
+    return { monthly: monthly.toFixed(2), tax: tax.toFixed(2), total: total.toFixed(2) };
+  }
+
+  // ── PayPal subscription plan links (preserved from old CRM) ─────────
+  function getPayPalLink(dogs, freq) {
+    const d = Math.min(Math.max(parseInt(dogs) || 1, 1), 4);
+    const LINKS = {
+      "Weekly": {
+        1: "https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-9AB23152CF446883ANGQSOFY",
+        2: "https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-8V5282460R849580WNG4ZE3Y",
+        3: "https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-0EP27027EX122625YNG4ZGOY",
+        4: "https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-0LP45057SD872114KNG4ZHGI",
+      },
+      "Every Other Week": {
+        1: "https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-0YY34747HY519940ENG4ZIVY",
+        2: "https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-25K44074G5477745ANG4ZKAQ",
+        3: "https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-68F709264F3192747NG4ZMFQ",
+        4: "https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-9GU84621G1436494VNG4ZMWQ",
+      },
+      "Monthly": {
+        1: "https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-1T858748GR534923KNG4ZNHQ",
+        2: "https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-4XX37144XL515532TNG4ZNUI",
+        3: "https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5JT07015HT3927040NG4ZOBY",
+        4: "https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-3RB3305459055110VNG4ZOQY",
+      },
+    };
+    return (LINKS[freq] && LINKS[freq][d]) || "https://www.poop-savvy.com";
+  }
+
+  // ── HTML → plain text (for mailto: body) ─────────────────────────────
+  function htmlToText(html) {
+    return String(html)
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n\n")
+      .replace(/<\/li>/gi, "\n")
+      .replace(/<li[^>]*>/gi, "• ")
+      .replace(/<\/tr>/gi, "\n")
+      .replace(/<td[^>]*>/gi, "  ")
+      .replace(/<a[^>]+href="([^"]+)"[^>]*>([^<]*)<\/a>/gi, "$2\n$1")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&amp;/g, "&")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
+  async function loadLead() {
+    if (!leadId) return renderError("No lead ID.");
+    try {
+      const data = await PS.api.select("leads", `id=eq.${leadId}&limit=1`);
+      if (!data?.length) return renderError("Lead not found.");
+      lead = data[0]; render();
+    } catch (e) { renderError("Could not load: " + (e.message || e)); }
+  }
+
+  function renderError(msg) {
+    document.getElementById("main").innerHTML = `
+      <a class="back-link" href="leads.html">← Back to Leads</a>
+      <div class="card"><div class="card-body" style="color:var(--red-700);">${PS.fmt.escape(msg)}</div></div>`;
+  }
+
+  function render() {
+    const name = [lead.first_name, lead.last_name].filter(Boolean).join(" ") || "Unnamed lead";
+    const created = lead.created_at ? PS.fmt.date(lead.created_at) : "—";
+    const dogs = lead.dogs_count || 1;
+    const freq = lead.service_frequency || "Weekly";
+
+    document.getElementById("main").innerHTML = `
+      <a class="back-link" href="leads.html">← Back to Leads</a>
+      <div class="page-title">
+        <div>
+          <h1 id="display-name">${PS.fmt.escape(name)}</h1>
+          <div class="sub" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;">
+            <span class="badge badge-${lead.status || "New"}" id="status-badge">${PS.fmt.escape(lead.status || "New")}</span>
+            <span class="muted">Added ${created}</span>
+            ${lead.source ? `<span class="muted">· ${PS.fmt.escape(lead.source)}</span>` : ""}
+          </div>
+        </div>
+        <div class="page-actions">
+          ${lead.phone ? `<a class="btn btn-secondary" href="tel:${lead.phone}">☎ Call</a>` : ""}
+          <button class="btn btn-success" onclick="convertToCustomer()">→ Convert to Customer</button>
+          <button class="btn btn-danger" onclick="deleteLead()">Delete</button>
+        </div>
+      </div>
+
+      <div class="detail-grid">
+        <div>
+          <div class="card">
+            <div class="card-head"><h3>Lead Details</h3></div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="form-group"><label>First name *</label><input id="f-first" type="text" value="${PS.fmt.escape(lead.first_name||"")}"></div>
+                <div class="form-group"><label>Last name</label><input id="f-last" type="text" value="${PS.fmt.escape(lead.last_name||"")}"></div>
+                <div class="form-group"><label>Phone</label><input id="f-phone" type="tel" value="${PS.fmt.escape(lead.phone||"")}"></div>
+                <div class="form-group"><label>Email</label><input id="f-email" type="email" value="${PS.fmt.escape(lead.email||"")}"></div>
+                <div class="form-group form-full"><label>Address</label><input id="f-address" type="text" value="${PS.fmt.escape(lead.address||"")}"></div>
+                <div class="form-group"><label>City</label><input id="f-city" type="text" value="${PS.fmt.escape(lead.city||"DeSoto")}"></div>
+                <div class="form-group"><label>Zip</label><input id="f-zip" type="text" value="${PS.fmt.escape(lead.zip||"")}"></div>
+                <div class="form-group"><label># Dogs</label><input id="f-dogs" type="number" min="1" max="10" value="${dogs}" oninput="renderEstimate();rebuildTemplates();"></div>
+                <div class="form-group"><label>Frequency</label>
+                  <select id="f-freq" onchange="renderEstimate();rebuildTemplates();">
+                    ${["Weekly","Every Other Week","Monthly"].map(s=>`<option${s===freq?" selected":""}>${s}</option>`).join("")}
+                  </select>
+                </div>
+                <div class="form-group"><label>Status</label>
+                  <select id="f-status" onchange="updateBadge(this.value)">
+                    ${["New","Contacted","Quoted","Won","Lost"].map(s=>`<option${s===lead.status?" selected":""}>${s}</option>`).join("")}
+                  </select>
+                </div>
+                <div class="form-group"><label>Source</label>
+                  <select id="f-source">
+                    <option value="">—</option>
+                    ${["Facebook Ad","Website","Referral","Door Hanger","Portal self-signup","Other"].map(s=>`<option${s===lead.source?" selected":""}>${s}</option>`).join("")}
+                  </select>
+                </div>
+                <div class="form-group form-full"><label>Notes</label><textarea id="f-notes" rows="4" placeholder="Notes…">${PS.fmt.escape(lead.notes||"")}</textarea></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card mt-2">
+            <div class="card-head"><h3>💰 Service Estimate</h3><span class="text-sm muted" id="est-sub">${dogs} dog${dogs>1?"s":""} · ${PS.fmt.escape(freq)}</span></div>
+            <div class="card-body" id="estimate-body"></div>
+          </div>
+        </div>
+
+        <div>
+          ${lead.phone ? `
+          <div class="card">
+            <div class="card-head"><h3>📱 SMS Templates</h3></div>
+            <div class="card-body">
+              <div id="sms-template-grid" style="display:flex;flex-direction:column;gap:8px;"></div>
+              <div class="custom-label">Custom Message</div>
+              <div class="sms-compose">
+                <textarea id="sms-text" rows="2" placeholder="Type a custom message to ${PS.fmt.escape((lead.first_name||"").split(" ")[0] || "this lead")}…"></textarea>
+                <button class="btn btn-primary" onclick="sendCustomSMS()" style="align-self:flex-end;">Send</button>
+              </div>
+              <div class="custom-label">Message History</div>
+              <div class="sms-thread" id="sms-thread">
+                <div class="empty" style="padding:0.5rem;">Loading…</div>
+              </div>
+            </div>
+          </div>` : ""}
+
+          ${lead.email ? `
+          <div class="card mt-2">
+            <div class="card-head"><h3>✉️ Email Templates</h3></div>
+            <div class="card-body">
+              <div class="text-sm muted mt-1" style="margin-bottom:10px;">Tap a template — your mail app opens with it pre-filled to review and send.</div>
+              <div id="email-template-grid" style="display:flex;flex-direction:column;gap:8px;"></div>
+            </div>
+          </div>` : ""}
+        </div>
+      </div>
+
+      <div class="save-bar">
+        <a class="btn btn-ghost" href="leads.html">Cancel</a>
+        <button class="btn btn-primary" onclick="saveLead()">Save Changes</button>
+      </div>
+    `;
+
+    renderEstimate();
+    rebuildTemplates();
+    if (lead.phone) loadSMSThread();
+  }
+
+  function renderEstimate() {
+    const dogs = parseInt(document.getElementById("f-dogs")?.value) || lead.dogs_count || 1;
+    const freq = document.getElementById("f-freq")?.value || lead.service_frequency || "Weekly";
+    const p = calcLeadPrice(dogs, freq);
+    const dogLabel = dogs === 1 ? "1 dog" : `${dogs} dogs`;
+    const sub = document.getElementById("est-sub");
+    if (sub) sub.textContent = `${dogLabel} · ${freq}`;
+    const el = document.getElementById("estimate-body");
+    if (!el) return;
+    el.innerHTML = `
+      <table class="estimate-table">
+        <tr><td class="muted">Monthly Rate</td><td style="text-align:right;font-weight:700;">$${p.monthly}</td></tr>
+        <tr><td class="muted">Tax (8.25%)</td><td style="text-align:right;">$${p.tax}</td></tr>
+        <tr class="total"><td>Total / Month</td><td style="text-align:right;">$${p.total}</td></tr>
+      </table>
+      <div class="text-sm faint mt-1">No contracts · Cancel anytime</div>
+    `;
+  }
+
+  function updateBadge(v) {
+    const b = document.getElementById("status-badge");
+    b.className = `badge badge-${v}`;
+    b.textContent = v;
+  }
+
+  function rebuildTemplates() {
+    const firstName = lead.first_name || "there";
+    const dogs = parseInt(document.getElementById("f-dogs")?.value) || lead.dogs_count || 1;
+    const freq = document.getElementById("f-freq")?.value || lead.service_frequency || "Weekly";
+    const price = calcLeadPrice(dogs, freq);
+    const dogLabel = `${dogs} dog${dogs > 1 ? "s" : ""}`;
+    const freqLabel = freq === "Every Other Week" ? "every other week" : freq.toLowerCase();
+    const paypalLink = getPayPalLink(dogs, freq);
+
+    // SMS Templates
+    const smsTemplates = [
+      { icon: "💰", label: "Quote",
+        msg: `Hi ${firstName}! This is Josh from Poop Savvy 🐾 Based on ${dogLabel} with ${freqLabel} service, your quote is $${price.total}/mo (includes 8.25% tax). No contracts! Reply to get started or visit www.poop-savvy.com 📞 972.388.8255` },
+      { icon: "👋", label: "Follow-Up #1 — Friendly Check-In",
+        msg: `Hi ${firstName}! Josh here from Poop Savvy 🐾 Just checking in — did you get a chance to think about our quote? $${price.total}/mo for ${freqLabel} cleanups. Happy to answer any questions! 📞 972.388.8255` },
+      { icon: "⭐", label: "Follow-Up #2 — Social Proof",
+        msg: `Hi ${firstName}! Josh from Poop Savvy here 🐾 Our customers love coming home to a clean yard! Your ${freqLabel} service is just $${price.total}/mo. We service DeSoto & surrounding areas. Ready to get started? 📞 972.388.8255` },
+      { icon: "🎯", label: "Follow-Up #3 — Last Chance",
+        msg: `Hi ${firstName}! Josh from Poop Savvy 🐾 Last check-in — I'd love to get your yard on our schedule! ${freqLabel} service for ${dogLabel} is $${price.total}/mo. No contracts, cancel anytime. Just reply YES to get started! 📞 972.388.8255` },
+    ];
+    window._smsTemplates = smsTemplates;
+
+    const smsGrid = document.getElementById("sms-template-grid");
+    if (smsGrid) {
+      smsGrid.innerHTML = smsTemplates.map((t, i) => {
+        const preview = t.msg.length > 80 ? t.msg.slice(0, 80) + "…" : t.msg;
+        return `<div class="tmpl-btn" onclick="sendTemplateSMS(${i})">
+          <div class="tmpl-icon">${t.icon}</div>
+          <div style="min-width:0;flex:1;">
+            <div class="tmpl-label">${PS.fmt.escape(t.label)}</div>
+            <div class="tmpl-preview">${PS.fmt.escape(preview)}</div>
+          </div>
+        </div>`;
+      }).join("");
+    }
+
+    // Email Templates (rich HTML, converted to plain text for mailto)
+    const emailTemplates = [
+      { icon: "💰", label: "Quote Email",
+        subject: `Your Poop Savvy Quote — ${dogLabel}, ${freq}`,
+        body: `<p>Hi ${firstName},</p>
+<p>Thanks for your interest in Poop Savvy! Here's your personalized quote:</p>
+<table style="border-collapse:collapse;">
+<tr><td>Service</td><td>Poop Scoop</td></tr>
+<tr><td>Dogs</td><td>${dogLabel}</td></tr>
+<tr><td>Frequency</td><td>${freq}</td></tr>
+<tr><td>Monthly Rate</td><td>$${price.monthly}</td></tr>
+<tr><td>Tax (8.25%)</td><td>$${price.tax}</td></tr>
+<tr><td>Total / Month</td><td>$${price.total}</td></tr>
+</table>
+<p>✅ No contracts · ✅ Cancel anytime · ✅ Reliable service</p>
+<p>Sign up here: ${paypalLink}</p>
+<p>Questions? Call or text us at 972.388.8255.</p>
+<p>Thanks,<br>Josh<br>Poop Savvy | 972.388.8255 | www.poop-savvy.com<br>DeSoto, TX & surrounding areas</p>`},
+      { icon: "👋", label: "Follow-Up #1 — Friendly Check-In",
+        subject: `Still interested in Poop Savvy? 🐾`,
+        body: `<p>Hi ${firstName},</p>
+<p>Just checking in to see if you had questions about your quote!</p>
+<p>Reminder: ${dogLabel}, ${freq} service — $${price.total}/mo (tax included). No contracts, cancel anytime.</p>
+<p>Sign up here: ${paypalLink}</p>
+<p>Reply anytime or call/text 972.388.8255 — we'd love to get your yard on the schedule!</p>
+<p>Thanks,<br>Josh<br>Poop Savvy | 972.388.8255</p>`},
+      { icon: "⭐", label: "Follow-Up #2 — Social Proof",
+        subject: `Your neighbors love Poop Savvy 🐾`,
+        body: `<p>Hi ${firstName},</p>
+<p>We're scooping yards all across DeSoto and surrounding areas — our customers love coming home to a clean, fresh yard.</p>
+<p>Your quote is still open: ${dogLabel}, ${freq} service — $${price.total}/mo (tax included).</p>
+<p>Sign up here: ${paypalLink}</p>
+<p>Questions? 972.388.8255</p>
+<p>Thanks,<br>Josh<br>Poop Savvy | 972.388.8255</p>`},
+      { icon: "🎯", label: "Follow-Up #3 — Last Chance",
+        subject: `Last chance to lock in your Poop Savvy rate 🐾`,
+        body: `<p>Hi ${firstName},</p>
+<p>This will be my last follow-up — didn't want to keep flooding your inbox — but I wanted to give you one more chance to grab a spot.</p>
+<p>Your quote: ${dogLabel}, ${freq} service — $${price.total}/mo (tax included). No commitment required.</p>
+<p>Sign up here: ${paypalLink}</p>
+<p>If the timing isn't right, no worries — reach out whenever you're ready. 📞 972.388.8255</p>
+<p>Thanks for considering us,<br>Josh<br>Poop Savvy | 972.388.8255 | www.poop-savvy.com</p>`},
+    ];
+    window._emailTemplates = emailTemplates;
+
+    const emailGrid = document.getElementById("email-template-grid");
+    if (emailGrid) {
+      emailGrid.innerHTML = emailTemplates.map((t, i) => `
+        <div class="tmpl-btn email" onclick="sendTemplateEmail(${i})">
+          <div class="tmpl-icon">${t.icon}</div>
+          <div style="min-width:0;flex:1;">
+            <div class="tmpl-label">${PS.fmt.escape(t.label)}</div>
+            <div class="tmpl-preview">${PS.fmt.escape(t.subject)}</div>
+          </div>
+        </div>`).join("");
+    }
+  }
+
+  async function loadSMSThread() {
+    if (!lead.phone) return;
+    try {
+      const messages = await PS.api.select("sms_log", `lead_id=eq.${leadId}&order=created_at.asc`);
+      const thread = document.getElementById("sms-thread");
+      if (!thread) return;
+      if (!messages.length) {
+        thread.innerHTML = `<div class="empty" style="padding:0.75rem;">No messages yet.</div>`;
+        return;
+      }
+      thread.innerHTML = messages.map(m => `
+        <div style="display:flex;flex-direction:column;align-items:${m.direction==='outbound'?'flex-end':'flex-start'};">
+          <div class="sms-bubble ${m.direction==='outbound'?'sms-out':'sms-in'}">${PS.fmt.escape(m.message||"")}</div>
+          <div class="sms-time" style="text-align:${m.direction==='outbound'?'right':'left'};color:var(--text-faint);">
+            ${PS.fmt.dateTime(m.created_at)}
+          </div>
+        </div>`).join("");
+      thread.scrollTop = thread.scrollHeight;
+    } catch (e) { /* ignore — empty thread is fine */ }
+  }
+
+  function sendTemplateSMS(i) {
+    const t = window._smsTemplates[i];
+    if (!t || !lead.phone) return;
+    // Log the outgoing message then open the native sms: composer
+    PS.api.insertMinimal("sms_log", {
+      lead_id: leadId, to_number: lead.phone, message: t.msg,
+      direction: "outbound", status: "Sent"
+    }).then(loadSMSThread).catch(()=>{});
+    window.open(`sms:${lead.phone}?body=${encodeURIComponent(t.msg)}`);
+  }
+
+  async function sendTemplateEmail(i) {
+    const t = window._emailTemplates[i];
+    if (!t || !lead.email) return;
+    const plainBody = htmlToText(t.body);
+    window.location.href = `mailto:${lead.email}?subject=${encodeURIComponent(t.subject)}&body=${encodeURIComponent(plainBody)}`;
+    // Auto-mark as Quoted when sending the first quote from a "New" lead
+    if (i === 0 && lead.status === "New") {
+      try {
+        await PS.api.patch("leads", `id=eq.${leadId}`, { status: "Quoted" });
+        lead.status = "Quoted";
+        updateBadge("Quoted");
+        const sel = document.getElementById("f-status");
+        if (sel) sel.value = "Quoted";
+        PS.toast("Marked as Quoted");
+      } catch (e) {}
+    }
+  }
+
+  async function sendCustomSMS() {
+    const msg = document.getElementById("sms-text").value.trim();
+    if (!msg || !lead.phone) return;
+    try {
+      await PS.api.insertMinimal("sms_log", {
+        lead_id: leadId, to_number: lead.phone, message: msg,
+        direction: "outbound", status: "Sent"
+      });
+      document.getElementById("sms-text").value = "";
+      loadSMSThread();
+      PS.toast("Message logged");
+      window.open(`sms:${lead.phone}?body=${encodeURIComponent(msg)}`);
+    } catch (e) { PS.toast("Could not log message", "error"); }
+  }
+
+  async function saveLead() {
+    const payload = {
+      first_name: document.getElementById("f-first").value.trim(),
+      last_name:  document.getElementById("f-last").value.trim(),
+      phone:      document.getElementById("f-phone").value.trim(),
+      email:      document.getElementById("f-email").value.trim(),
+      address:    document.getElementById("f-address").value.trim(),
+      city:       document.getElementById("f-city").value.trim(),
+      zip:        document.getElementById("f-zip").value.trim(),
+      dogs_count: parseInt(document.getElementById("f-dogs").value) || 1,
+      service_frequency: document.getElementById("f-freq").value,
+      status:     document.getElementById("f-status").value,
+      source:     document.getElementById("f-source").value || null,
+      notes:      document.getElementById("f-notes").value.trim() || null,
+    };
+    if (!payload.first_name) return PS.toast("First name required", "error");
+    try {
+      await PS.api.patch("leads", `id=eq.${leadId}`, payload);
+      Object.assign(lead, payload);
+      document.getElementById("display-name").textContent = [payload.first_name, payload.last_name].filter(Boolean).join(" ");
+      rebuildTemplates();
+      PS.toast("Saved!");
+    } catch (e) { PS.toast("Save failed", "error"); }
+  }
+
+  async function deleteLead() {
+    if (!confirm("Delete this lead?")) return;
+    try {
+      await PS.api.delete("leads", `id=eq.${leadId}`);
+      PS.toast("Deleted");
+      setTimeout(() => window.location.href = "leads.html", 600);
+    } catch (e) { PS.toast("Delete failed", "error"); }
+  }
+
+  async function convertToCustomer() {
+    const fullName = [lead.first_name, lead.last_name].filter(Boolean).join(" ");
+    if (!fullName) return PS.toast("Need at least a first name", "error");
+    if (!confirm(`Convert ${fullName} into a customer?`)) return;
+    try {
+      const dogs = lead.dogs_count || 1;
+      const freq = lead.service_frequency || "Weekly";
+      const rate = PS.pricing.calcPrice(dogs, freq);
+      const today = PS.fmt.today();
+      const created = await PS.api.insert("customers", {
+        name: fullName,
+        phone: lead.phone || null,
+        email: lead.email || null,
+        address: lead.address || null,
+        city: lead.city || "DeSoto",
+        zip: lead.zip || null,
+        dogs_count: dogs,
+        service_frequency: freq,
+        monthly_rate: rate,
+        start_date: today,
+        member_since: today,
+        service_status: "active",
+        billing_platform: "paypal",
+        yard_notes: lead.notes || null,
+      });
+      const newId = Array.isArray(created) ? created[0]?.id : created?.id;
+      await PS.api.patch("leads", `id=eq.${leadId}`, { status: "Won" });
+      PS.toast("Converted! Opening customer…");
+      setTimeout(() => window.location.href = `customer-detail.html?id=${newId}`, 500);
+    } catch (e) { PS.toast("Convert failed: " + (e.message||e), "error"); }
+  }
+
+  window.onAuthReady = loadLead;
+</script>
+</body>
+</html>

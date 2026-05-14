@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Poop Savvy — Leads</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#0ea5e9">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="app.css">
+<style>
+  .act-btn {
+    font-size: 11px; padding: 5px 10px; border-radius: 6px;
+    border: 1px solid; background: #fff; font-weight: 700;
+    cursor: pointer; transition: all 0.12s; white-space: nowrap;
+  }
+  .act-btn.sms { color: var(--accent); border-color: var(--accent-100); }
+  .act-btn.sms:hover { background: var(--accent-50); }
+  .act-btn.email { color: var(--green-700); border-color: #a7f3d0; }
+  .act-btn.email:hover { background: #d1fae5; }
+  .act-btn.call { color: var(--purple-700); border-color: #ddd6fe; }
+  .act-btn.call:hover { background: var(--purple-50); }
+  .act-btn.del { color: var(--red-700); border-color: #fecaca; }
+  .act-btn.del:hover { background: var(--red-50); }
+  .status-select {
+    font-size: 12px; font-weight: 600;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px; padding: 4px 10px 4px 10px;
+    background: #fff; cursor: pointer; outline: none;
+  }
+  .status-select:focus { border-color: var(--accent); }
+  .actions { display: flex; gap: 4px; flex-wrap: wrap; }
+  .bulk-bar {
+    position: sticky; top: calc(var(--header-h) + 6px);
+    z-index: 10;
+    background: var(--accent);
+    color: #fff;
+    padding: 10px 14px; border-radius: 10px;
+    display: none; align-items: center; justify-content: space-between;
+    gap: 10px; margin-bottom: 12px;
+    box-shadow: 0 8px 20px rgba(14,165,233,0.25);
+  }
+  .bulk-bar.show { display: flex; }
+  .bulk-bar .bulk-actions { display: flex; gap: 6px; }
+  .bulk-bar select, .bulk-bar button {
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff; padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 600;
+  }
+  .bulk-bar button:hover { background: rgba(255,255,255,0.28); }
+  .check-col { width: 36px; }
+  .row-check { accent-color: var(--accent); width: 16px; height: 16px; }
+  @media (max-width: 700px) {
+    th:nth-child(6), td:nth-child(6),
+    th:nth-child(7), td:nth-child(7) { display: none; }
+  }
+</style>
+</head>
+<body data-page="leads">
+<nav class="app-nav" id="app-nav"></nav>
+
+<div class="container">
+  <div class="page-title">
+    <div>
+      <h1>Leads</h1>
+      <div class="sub" id="sub">Track prospects from first contact to close</div>
+    </div>
+    <div class="page-actions">
+      <button class="btn btn-ghost" onclick="exportCSV()">⬇ CSV</button>
+      <button class="btn btn-primary" onclick="openAddModal()">+ Add Lead</button>
+    </div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi accent"><div class="kpi-label">Total</div><div class="kpi-val" id="s-total">—</div></div>
+    <div class="kpi amber"><div class="kpi-label">New</div><div class="kpi-val" id="s-new">—</div></div>
+    <div class="kpi purple"><div class="kpi-label">Contacted</div><div class="kpi-val" id="s-contacted">—</div></div>
+    <div class="kpi accent"><div class="kpi-label">Quoted</div><div class="kpi-val" id="s-quoted">—</div></div>
+    <div class="kpi green"><div class="kpi-label">Won</div><div class="kpi-val" id="s-won">—</div></div>
+  </div>
+
+  <div class="bulk-bar" id="bulk-bar">
+    <div><b id="bulk-count">0</b> selected</div>
+    <div class="bulk-actions">
+      <select id="bulk-status">
+        <option value="">Change status…</option>
+        <option>New</option><option>Contacted</option><option>Quoted</option><option>Won</option><option>Lost</option>
+      </select>
+      <button onclick="bulkApplyStatus()">Apply</button>
+      <button onclick="bulkDelete()">Delete</button>
+      <button onclick="clearSelection()">Cancel</button>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="search-wrap">
+      <input type="text" id="search" placeholder="Search name, phone, email, address…" oninput="onSearch(this.value)">
+      <button class="clear-btn" onclick="clearSearch()" aria-label="Clear">×</button>
+    </div>
+    <div class="pill-row" id="filter-pills">
+      <span class="pill active" data-filter="All">All</span>
+      <span class="pill" data-filter="New">New</span>
+      <span class="pill" data-filter="Contacted">Contacted</span>
+      <span class="pill" data-filter="Quoted">Quoted</span>
+      <span class="pill" data-filter="Won">Won</span>
+      <span class="pill" data-filter="Lost">Lost</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap" id="table-wrap"><div class="loading">Loading leads…</div></div>
+  </div>
+</div>
+
+<!-- Add modal -->
+<div class="overlay" id="modal-overlay">
+  <div class="modal">
+    <h2>Add Lead</h2>
+    <div class="form-grid">
+      <div class="form-group"><label>First name *</label><input id="f-first" type="text"></div>
+      <div class="form-group"><label>Last name</label><input id="f-last" type="text"></div>
+      <div class="form-group"><label>Phone</label><input id="f-phone" type="tel" placeholder="972-555-0000"></div>
+      <div class="form-group"><label>Email</label><input id="f-email" type="email"></div>
+      <div class="form-group form-full"><label>Address</label><input id="f-address" type="text"></div>
+      <div class="form-group"><label>City</label><input id="f-city" type="text" value="DeSoto"></div>
+      <div class="form-group"><label>Zip</label><input id="f-zip" type="text"></div>
+      <div class="form-group"><label># Dogs</label><input id="f-dogs" type="number" min="1" max="10" value="1"></div>
+      <div class="form-group"><label>Frequency</label>
+        <select id="f-freq">
+          <option>Weekly</option><option>Every Other Week</option><option>Monthly</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Status</label>
+        <select id="f-status">
+          <option>New</option><option>Contacted</option><option>Quoted</option><option>Won</option><option>Lost</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Source</label>
+        <select id="f-source">
+          <option value="">— select —</option>
+          <option>Facebook Ad</option><option>Website</option><option>Referral</option><option>Door Hanger</option><option>Other</option>
+        </select>
+      </div>
+      <div class="form-group form-full"><label>Notes</label><textarea id="f-notes" rows="3" placeholder="Notes about this lead…"></textarea></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="save-btn" onclick="saveLead()">Save Lead</button>
+    </div>
+  </div>
+</div>
+
+<nav class="tab-bar" id="tab-bar"></nav>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="app.js"></script>
+<script>
+  let allLeads = [];
+  let filter = "All";
+  let sortCol = "created_at", sortDir = "desc";
+  let searchQ = "";
+  let selected = new Set();
+  let searchDebounce;
+
+  function onSearch(v) {
+    clearTimeout(searchDebounce);
+    document.querySelector(".search-wrap").classList.toggle("has-value", !!v);
+    searchDebounce = setTimeout(() => { searchQ = v.trim().toLowerCase(); renderTable(); }, 150);
+  }
+  function clearSearch() {
+    document.getElementById("search").value = "";
+    onSearch("");
+    document.getElementById("search").focus();
+  }
+
+  document.getElementById("filter-pills").addEventListener("click", (e) => {
+    const pill = e.target.closest(".pill"); if (!pill) return;
+    document.querySelectorAll("#filter-pills .pill").forEach(p => p.classList.remove("active"));
+    pill.classList.add("active");
+    filter = pill.dataset.filter; renderTable();
+  });
+
+  async function loadLeads() {
+    try {
+      allLeads = await PS.api.select("leads", "order=created_at.desc") || [];
+      updateStats(); renderTable();
+    } catch (e) {
+      document.getElementById("table-wrap").innerHTML = `
+        <div class="empty" style="padding:2rem;">
+          <div class="empty-title">Could not load leads</div>
+          <div class="text-sm" style="word-break:break-word;">${PS.fmt.escape(e.message || String(e))}</div>
+          <button class="btn btn-secondary mt-2" onclick="loadLeads()">Retry</button>
+        </div>`;
+    }
+  }
+
+  function updateStats() {
+    document.getElementById("s-total").textContent = allLeads.length;
+    ["New","Contacted","Quoted","Won"].forEach(s => {
+      document.getElementById("s-" + s.toLowerCase()).textContent = allLeads.filter(l => l.status === s).length;
+    });
+    document.getElementById("sub").textContent = `${allLeads.length} total · ${allLeads.filter(l=>l.status==="New"||!l.status).length} new`;
+  }
+
+  function sortLeads(col) {
+    if (sortCol === col) sortDir = sortDir === "asc" ? "desc" : "asc";
+    else { sortCol = col; sortDir = "asc"; }
+    renderTable();
+  }
+  function sa(col) {
+    if (sortCol !== col) return '<span style="color:#cbd5e1;margin-left:3px;">⇅</span>';
+    return sortDir === "asc" ? '<span style="margin-left:3px;">↑</span>' : '<span style="margin-left:3px;">↓</span>';
+  }
+
+  function renderTable() {
+    const leads = allLeads.filter(l => {
+      if (filter !== "All" && l.status !== filter) return false;
+      if (searchQ) {
+        const blob = [l.first_name, l.last_name, l.phone, l.email, l.address, l.city, l.zip, l.notes].filter(Boolean).join(" ").toLowerCase();
+        if (!blob.includes(searchQ)) return false;
+      }
+      return true;
+    }).sort((a, b) => {
+      let av, bv;
+      if (sortCol === "name") { av = [a.first_name,a.last_name].filter(Boolean).join(" ").toLowerCase(); bv = [b.first_name,b.last_name].filter(Boolean).join(" ").toLowerCase(); }
+      else if (sortCol === "dogs") { av = a.dogs_count || 0; bv = b.dogs_count || 0; }
+      else { av = a[sortCol] || ""; bv = b[sortCol] || ""; }
+      if (av < bv) return sortDir === "asc" ? -1 : 1;
+      if (av > bv) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    if (!leads.length) {
+      document.getElementById("table-wrap").innerHTML = `
+        <div class="empty" style="padding:3rem;">
+          <div class="empty-title">No leads match.</div>
+          <div>Try clearing the search or a different filter.</div>
+        </div>`;
+      return;
+    }
+
+    const rows = leads.map(l => {
+      const name = [l.first_name, l.last_name].filter(Boolean).join(" ") || "—";
+      const loc = [l.city, l.zip].filter(Boolean).join(", ") || "—";
+      const date = l.created_at ? PS.fmt.date(l.created_at) : "—";
+      const isSel = selected.has(l.id);
+      return `<tr data-id="${l.id}">
+        <td class="check-col"><input type="checkbox" class="row-check" ${isSel?"checked":""} onchange="toggleSelect('${l.id}', this.checked)"></td>
+        <td>
+          <a class="link" href="lead-detail.html?id=${l.id}">${PS.fmt.escape(name)}</a>
+          <div class="sub-line">${PS.fmt.escape(loc)}</div>
+        </td>
+        <td>${PS.fmt.escape(PS.fmt.phone(l.phone) || "—")}</td>
+        <td>${(l.dogs_count || 1)} · ${PS.fmt.escape(l.service_frequency || "—")}</td>
+        <td style="font-size:12px;color:var(--text-muted);">${date}</td>
+        <td>${PS.fmt.escape(l.source || "—")}</td>
+        <td>
+          <select class="status-select" onchange="updateStatus('${l.id}', this.value)">
+            ${["New","Contacted","Quoted","Won","Lost"].map(s=>`<option${s===l.status?" selected":""}>${s}</option>`).join("")}
+          </select>
+        </td>
+        <td>
+          <div class="actions">
+            ${l.phone?`<button class="act-btn call" onclick="callLead('${l.phone}')" title="Call">☎</button>`:""}
+            ${l.phone?`<button class="act-btn sms" onclick="smsLead('${l.phone}','${PS.fmt.jsAttr(name)}')">SMS</button>`:""}
+            ${l.email?`<button class="act-btn email" onclick="emailLead('${l.email}','${PS.fmt.jsAttr(name)}')">Email</button>`:""}
+            <button class="act-btn del" onclick="deleteLead('${l.id}')">Del</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join("");
+
+    document.getElementById("table-wrap").innerHTML = `
+      <table class="t">
+        <thead><tr>
+          <th class="check-col"><input type="checkbox" onchange="toggleSelectAll(this.checked)"></th>
+          <th class="sortable" onclick="sortLeads('name')">Name ${sa("name")}</th>
+          <th>Phone</th>
+          <th class="sortable" onclick="sortLeads('dogs')">Dogs · Freq ${sa("dogs")}</th>
+          <th class="sortable" onclick="sortLeads('created_at')">Added ${sa("created_at")}</th>
+          <th class="sortable" onclick="sortLeads('source')">Source ${sa("source")}</th>
+          <th class="sortable" onclick="sortLeads('status')">Status ${sa("status")}</th>
+          <th>Actions</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+
+    refreshBulkBar();
+  }
+
+  function toggleSelect(id, on) { on ? selected.add(id) : selected.delete(id); refreshBulkBar(); }
+  function toggleSelectAll(on) {
+    const rows = document.querySelectorAll("#table-wrap tbody tr");
+    rows.forEach(r => { const id = r.dataset.id; on ? selected.add(id) : selected.delete(id); });
+    document.querySelectorAll(".row-check").forEach(c => c.checked = on);
+    refreshBulkBar();
+  }
+  function clearSelection() { selected.clear(); renderTable(); }
+  function refreshBulkBar() {
+    const bar = document.getElementById("bulk-bar");
+    bar.classList.toggle("show", selected.size > 0);
+    document.getElementById("bulk-count").textContent = selected.size;
+  }
+
+  async function bulkApplyStatus() {
+    const st = document.getElementById("bulk-status").value;
+    if (!st) return PS.toast("Pick a status first", "error");
+    if (!selected.size) return;
+    const ids = [...selected];
+    try {
+      await PS.api.patch("leads", `id=in.(${ids.join(",")})`, { status: st });
+      ids.forEach(id => { const l = allLeads.find(x => x.id === id); if (l) l.status = st; });
+      PS.toast(`Updated ${ids.length} leads`);
+      selected.clear(); updateStats(); renderTable();
+    } catch (e) { PS.toast("Update failed", "error"); }
+  }
+
+  async function bulkDelete() {
+    if (!selected.size) return;
+    if (!confirm(`Delete ${selected.size} leads? This cannot be undone.`)) return;
+    const ids = [...selected];
+    try {
+      await PS.api.delete("leads", `id=in.(${ids.join(",")})`);
+      allLeads = allLeads.filter(l => !selected.has(l.id));
+      selected.clear();
+      PS.toast(`Deleted ${ids.length} leads`);
+      updateStats(); renderTable();
+    } catch (e) { PS.toast("Delete failed", "error"); }
+  }
+
+  async function updateStatus(id, status) {
+    const lead = allLeads.find(l => l.id === id);
+    const prev = lead?.status;
+    if (lead) lead.status = status; updateStats();
+    try {
+      await PS.api.patch("leads", `id=eq.${id}`, { status });
+      PS.toast("Status updated");
+    } catch (e) {
+      if (lead) lead.status = prev;
+      PS.toast("Status update failed", "error");
+      updateStats(); renderTable();
+    }
+  }
+
+  async function deleteLead(id) {
+    if (!confirm("Delete this lead? This cannot be undone.")) return;
+    try {
+      await PS.api.delete("leads", `id=eq.${id}`);
+      allLeads = allLeads.filter(l => l.id !== id);
+      updateStats(); renderTable();
+      PS.toast("Deleted");
+    } catch (e) { PS.toast("Delete failed", "error"); }
+  }
+
+  function callLead(phone) { window.location.href = `tel:${phone}`; }
+  function smsLead(phone, name) {
+    const first = name.split(" ")[0];
+    window.open(`sms:${phone}?body=${encodeURIComponent(`Hi ${first}, this is Josh from Poop Savvy! 🐾 Thanks for your interest — do you have a few minutes to chat?`)}`);
+  }
+  function emailLead(email, name) {
+    const first = name.split(" ")[0];
+    const body = `Hi ${first},%0D%0A%0D%0AThanks for reaching out to Poop Savvy! I'd love to get you set up with weekly or bi-weekly service.%0D%0A%0D%0ABest,%0D%0AJosh%0D%0A972.388.8255`;
+    window.open(`mailto:${email}?subject=Poop%20Savvy%20—%20Follow%20Up&body=${body}`);
+  }
+
+  function openAddModal() {
+    ["first","last","phone","email","address","notes","zip"].forEach(k => document.getElementById("f-"+k).value = "");
+    document.getElementById("f-city").value = "DeSoto";
+    document.getElementById("f-dogs").value = 1;
+    document.getElementById("f-freq").value = "Weekly";
+    document.getElementById("f-status").value = "New";
+    document.getElementById("f-source").value = "";
+    document.getElementById("modal-overlay").classList.add("open");
+    setTimeout(() => document.getElementById("f-first").focus(), 60);
+  }
+  function closeModal() { document.getElementById("modal-overlay").classList.remove("open"); }
+  document.getElementById("modal-overlay").addEventListener("click", e => { if (e.target === e.currentTarget) closeModal(); });
+
+  async function saveLead() {
+    const payload = {
+      first_name: document.getElementById("f-first").value.trim(),
+      last_name:  document.getElementById("f-last").value.trim(),
+      phone:      document.getElementById("f-phone").value.trim(),
+      email:      document.getElementById("f-email").value.trim(),
+      address:    document.getElementById("f-address").value.trim(),
+      city:       document.getElementById("f-city").value.trim(),
+      zip:        document.getElementById("f-zip").value.trim(),
+      dogs_count: parseInt(document.getElementById("f-dogs").value) || 1,
+      service_frequency: document.getElementById("f-freq").value,
+      status:     document.getElementById("f-status").value,
+      source:     document.getElementById("f-source").value || null,
+      notes:      document.getElementById("f-notes").value.trim() || null,
+    };
+    if (!payload.first_name) return PS.toast("First name is required", "error");
+    const btn = document.getElementById("save-btn");
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      await PS.api.insertMinimal("leads", payload);
+      PS.toast("Lead added!"); closeModal(); loadLeads();
+    } catch (e) { PS.toast("Could not save", "error"); }
+    btn.disabled = false; btn.textContent = "Save Lead";
+  }
+
+  function exportCSV() {
+    if (!allLeads.length) return PS.toast("Nothing to export", "info");
+    const headers = ["first_name","last_name","phone","email","address","city","zip","dogs_count","service_frequency","status","source","notes","created_at"];
+    const rows = allLeads.map(l => headers.map(h => JSON.stringify(l[h] ?? "")).join(","));
+    const csv = headers.join(",") + "\n" + rows.join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `poopsavvy-leads-${PS.fmt.today()}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  window.onAuthReady = loadLeads;
+</script>
+</body>
+</html>

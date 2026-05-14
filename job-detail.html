@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Poop Savvy — Job</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#0ea5e9">
+<link rel="stylesheet" href="app.css">
+<style>
+  .job-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 980px) { .job-grid { grid-template-columns: 1fr; } }
+
+  .pipeline {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 6px 0 4px;
+  }
+  .pipe {
+    padding: 14px 10px; border-radius: 14px;
+    border: 2px solid var(--border-strong); background: #fff;
+    color: var(--text-muted); font-weight: 800; font-size: 14px;
+    text-align: center; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    min-height: 80px; justify-content: center;
+    transition: all 0.15s;
+  }
+  .pipe:hover { border-color: var(--accent-100); }
+  .pipe.active {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+    box-shadow: 0 6px 18px rgba(14,165,233,0.35);
+  }
+  .pipe.done { background: var(--green-50); color: var(--green-700); border-color: #a7f3d0; }
+  .pipe-time { font-size: 10px; opacity: 0.9; font-weight: 600; }
+  .pipe .ic { font-size: 18px; }
+
+  .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .info-item { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .info-item .k { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+  .info-item .v { font-size: 14px; color: var(--text); margin-top: 3px; font-weight: 600; }
+  .gate-code {
+    background: var(--amber-50); color: var(--amber-700);
+    padding: 4px 10px; border-radius: 6px;
+    font-weight: 700; font-family: ui-monospace, monospace;
+    display: inline-block;
+  }
+  .yard-box {
+    background: #fffbeb; border: 1px solid #fde68a;
+    border-radius: 10px; padding: 10px 14px;
+    font-size: 13px; color: #78350f; margin-top: 10px;
+  }
+  .chip {
+    display: inline-block; font-size: 11px; padding: 3px 10px; border-radius: 999px;
+    background: var(--accent-50); color: var(--accent-600); font-weight: 700;
+    margin-right: 6px;
+  }
+
+  .sms-btn {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface-2); cursor: pointer; transition: all 0.15s;
+    text-align: left;
+  }
+  .sms-btn:hover { border-color: var(--accent-100); background: var(--accent-50); }
+  .sms-icon { font-size: 22px; line-height: 1; }
+  .sms-label { font-weight: 700; font-size: 13px; color: var(--text); }
+  .sms-preview { font-size: 11px; color: var(--text-muted); margin-top: 2px; line-height: 1.4; }
+  .sms-grid { display: grid; gap: 6px; }
+
+  .photos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+  .photo-thumb {
+    aspect-ratio: 1; border-radius: 10px; overflow: hidden;
+    position: relative; background: var(--surface-2); border: 1px solid var(--border);
+  }
+  .photo-thumb img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
+  .photo-del {
+    position: absolute; top: 6px; right: 6px;
+    background: rgba(0,0,0,0.6); border: 0; color: #fff;
+    width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
+    font-size: 12px; line-height: 1;
+  }
+
+  .eta-btn {
+    padding: 12px 8px; border: 1px solid var(--border-strong); border-radius: 10px;
+    background: var(--accent-50); color: var(--accent-600);
+    cursor: pointer; font-weight: 800; font-size: 15px;
+    transition: all 0.1s;
+  }
+  .eta-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .eta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+  .eta-wrap { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+  .eta-wrap input {
+    flex: 1; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 10px; font-size: 15px; outline: none;
+  }
+</style>
+</head>
+<body data-page="schedule">
+<nav class="app-nav" id="app-nav"></nav>
+
+<div class="container" id="main">
+  <div class="loading">Loading job…</div>
+</div>
+
+<!-- Reschedule Modal -->
+<div class="overlay" id="reschedule-overlay">
+  <div class="modal">
+    <h2>Reschedule Job</h2>
+    <div class="form-group"><label>New date</label><input type="date" id="reschedule-date"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="document.getElementById('reschedule-overlay').classList.remove('open')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveReschedule()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ETA Modal -->
+<div class="overlay" id="eta-overlay">
+  <div class="modal" style="max-width:440px;">
+    <h2>How long until arrival?</h2>
+    <div class="eta-grid">
+      <button class="eta-btn" onclick="sendETA(5)">5 min</button>
+      <button class="eta-btn" onclick="sendETA(10)">10 min</button>
+      <button class="eta-btn" onclick="sendETA(15)">15 min</button>
+      <button class="eta-btn" onclick="sendETA(20)">20 min</button>
+      <button class="eta-btn" onclick="sendETA(30)">30 min</button>
+      <button class="eta-btn" onclick="sendETA(45)">45 min</button>
+      <button class="eta-btn" onclick="sendETA(60)">1 hr</button>
+      <button class="eta-btn" onclick="sendETA(90)">90 min</button>
+    </div>
+    <div class="eta-wrap">
+      <input type="number" id="custom-eta" placeholder="Custom minutes…" min="1" max="300">
+      <button class="btn btn-primary" onclick="sendCustomETA()">Send</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="document.getElementById('eta-overlay').classList.remove('open')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<nav class="tab-bar" id="tab-bar"></nav>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="app.js"></script>
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const JOB_ID = params.get("id");
+  const FROM = params.get("from") || "schedule";
+  const CID = params.get("cid");
+  let job = null, customer = null;
+
+  async function load() {
+    if (!JOB_ID) return err("No job id");
+    try {
+      const data = await PS.api.select("schedules", `id=eq.${JOB_ID}&select=*,customers(*)&limit=1`);
+      if (!data?.length) return err("Job not found");
+      job = data[0]; customer = job.customers || {};
+      render();
+    } catch (e) { err("Could not load: " + (e.message||e)); }
+  }
+  function err(msg) {
+    document.getElementById("main").innerHTML = `
+      <a class="back-link" href="${backHref()}">← Back</a>
+      <div class="card"><div class="card-body" style="color:var(--red-700);">${PS.fmt.escape(msg)}</div></div>`;
+  }
+  function backHref() {
+    if (FROM === "customer" && CID) return `customer-detail.html?id=${CID}`;
+    if (FROM === "routes") return "routes.html";
+    if (FROM === "dashboard") return "index.html";
+    return "schedule.html";
+  }
+
+  function render() {
+    const st = job.status || "Scheduled";
+    const dogs = customer.dogs_count || 1;
+    const freq = customer.service_frequency || "—";
+    const address = [customer.address, customer.city, "TX"].filter(Boolean).join(", ");
+    const mapsLink = customer.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}` : null;
+    const dialLink = customer.phone ? `tel:${customer.phone}` : null;
+    const effectiveTech = job.tech_name || customer.assigned_tech || "";
+    const roster = (window.PS?.view?.roster?.() || ["Josh","Dee","Drake"]);
+    // Ensure the currently-set override is always in the dropdown even if
+    // the roster has changed since it was assigned.
+    const rosterOpts = roster.slice();
+    if (job.tech_name && !rosterOpts.includes(job.tech_name)) rosterOpts.push(job.tech_name);
+
+    const pipe = (key, ic, label, stateActive, stateDone, ts) => {
+      const cls = stateActive ? "active" : stateDone ? "done" : "";
+      return `<div class="pipe ${cls}" onclick="updateStatus('${key}')">
+        <span class="ic">${ic}</span>
+        <span>${label}</span>
+        ${ts ? `<span class="pipe-time">${PS.fmt.time(ts)}</span>` : ""}
+      </div>`;
+    };
+
+    document.getElementById("main").innerHTML = `
+      <a class="back-link" href="${backHref()}">← Back</a>
+      <div class="page-title">
+        <div>
+          <h1>${PS.fmt.escape(customer.name || "Job")}</h1>
+          <div class="sub" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+            <span class="badge badge-${st.replace(/\s/g,'')}">${st}</span>
+            <span class="muted">${PS.fmt.dateLong(job.scheduled_date)}</span>
+            <span class="chip">${dogs} dog${dogs>1?"s":""}</span>
+            <span class="chip">${PS.fmt.escape(freq)}</span>
+            ${effectiveTech ? `<span class="chip">👤 ${PS.fmt.escape(effectiveTech)}${job.tech_name ? " (override)" : ""}</span>` : ""}
+          </div>
+        </div>
+        <div class="page-actions">
+          ${customer.id ? `<a class="btn btn-ghost" href="customer-detail.html?id=${customer.id}">Customer →</a>` : ""}
+          <button class="btn btn-ghost" onclick="openReschedule()">📅 Reschedule</button>
+          <button class="btn btn-danger" onclick="deleteJob()">Delete</button>
+        </div>
+      </div>
+
+      <div class="job-grid">
+        <div>
+          <div class="card">
+            <div class="card-head"><h3>Job Pipeline</h3></div>
+            <div class="card-body">
+              <div class="pipeline">
+                ${pipe("Scheduled","📋","Scheduled", st==="Scheduled", ["En Route","Arrived","Completed"].includes(st), job.created_at)}
+                ${pipe("En Route","🚗","En Route", st==="En Route", ["Arrived","Completed"].includes(st), job.en_route_at)}
+                ${pipe("Arrived","📍","Arrived", st==="Arrived", st==="Completed", job.arrived_at)}
+                ${pipe("Completed","✅","Complete", st==="Completed", false, job.completed_at)}
+              </div>
+              <div class="mt-2" style="display:flex;gap:6px;flex-wrap:wrap;">
+                ${(job.en_route_at && job.arrived_at) ? `<span class="chip">🚗 Drive: ${minsDiff(job.en_route_at, job.arrived_at)} min</span>` : ""}
+                ${(job.arrived_at && job.completed_at) ? `<span class="chip">🧹 Scoop: ${minsDiff(job.arrived_at, job.completed_at)} min</span>` : ""}
+                ${(job.en_route_at && job.completed_at) ? `<span class="chip">⏱ Total: ${minsDiff(job.en_route_at, job.completed_at)} min</span>` : ""}
+              </div>
+              <div class="mt-3" style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button class="btn btn-warning btn-sm" onclick="updateStatus('Skipped')">⏭️ Skip</button>
+                <button class="btn btn-danger btn-sm" onclick="updateStatus('Cancelled')">❌ Cancel</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card mt-2">
+            <div class="card-head"><h3>Customer Details</h3></div>
+            <div class="card-body">
+              <div class="info-grid">
+                <div class="info-item"><div class="k">📍 Address</div><div class="v">${mapsLink ? `<a href="${mapsLink}" target="_blank" rel="noopener" style="color:var(--accent-600);text-decoration:underline;">${PS.fmt.escape(address)}</a>` : (PS.fmt.escape(address) || "—")}</div></div>
+                <div class="info-item"><div class="k">📞 Phone</div><div class="v">${dialLink ? `<a href="${dialLink}">${PS.fmt.escape(PS.fmt.phone(customer.phone))}</a>` : "—"}</div></div>
+                <div class="info-item"><div class="k">📧 Email</div><div class="v">${customer.email ? `<a href="mailto:${customer.email}">${PS.fmt.escape(customer.email)}</a>` : "—"}</div></div>
+                <div class="info-item"><div class="k">💵 Monthly</div><div class="v">${customer.monthly_rate ? "$"+parseFloat(customer.monthly_rate).toFixed(2) : "—"}</div></div>
+                ${customer.gate_code ? `<div class="info-item" style="grid-column:span 2;"><div class="k">🔑 Gate Code</div><div class="v"><span class="gate-code">${PS.fmt.escape(customer.gate_code)}</span></div></div>` : ""}
+                <div class="info-item" style="grid-column:span 2;">
+                  <div class="k">👤 Tech for this visit</div>
+                  <div class="v" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px;">
+                    <select id="tech-override" onchange="saveTechOverride()" style="padding:7px 10px;border:1px solid var(--border-strong);border-radius:8px;font-size:13px;background:#fff;">
+                      <option value="">Default — ${PS.fmt.escape(customer.assigned_tech || "unassigned")}</option>
+                      ${rosterOpts.map(n => `<option value="${PS.fmt.escape(n)}"${job.tech_name === n ? " selected" : ""}>${PS.fmt.escape(n)}</option>`).join("")}
+                    </select>
+                    <span class="text-sm muted">Master (customer): <b>${PS.fmt.escape(customer.assigned_tech || "—")}</b>${job.tech_name ? ` · <span style="color:var(--amber-700);">override active</span>` : ""}</span>
+                  </div>
+                </div>
+              </div>
+              ${customer.yard_notes ? `<div class="yard-box"><b>⚠️ Yard / Access Notes</b><br>${PS.fmt.escape(customer.yard_notes)}</div>` : ""}
+              <div class="mt-2" style="display:flex;gap:6px;flex-wrap:wrap;">
+                ${mapsLink ? `<a class="btn btn-secondary btn-sm" target="_blank" rel="noopener" href="${mapsLink}">🗺️ Directions</a>` : ""}
+                ${dialLink ? `<a class="btn btn-secondary btn-sm" href="${dialLink}">☎ Call</a>` : ""}
+              </div>
+            </div>
+          </div>
+
+          <div class="card mt-2">
+            <div class="card-head"><h3>Notes</h3></div>
+            <div class="card-body">
+              <div class="form-group"><label>Visit Notes</label><textarea id="visit-notes" rows="2" placeholder="What should the tech know?">${PS.fmt.escape(job.notes||"")}</textarea></div>
+              <div class="form-group mt-2"><label>Completion Notes</label><textarea id="completed-notes" rows="2" placeholder="What happened on this visit?">${PS.fmt.escape(job.completed_notes||"")}</textarea></div>
+              <button class="btn btn-primary btn-sm mt-2" onclick="saveNotes()">💾 Save Notes</button>
+            </div>
+          </div>
+
+          <div class="card mt-2">
+            <div class="card-head">
+              <h3>Photos</h3>
+              <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
+                📸 Upload
+                <input type="file" id="photo-input" accept="image/*" multiple style="display:none;" onchange="uploadPhotos(this.files)">
+              </label>
+            </div>
+            <div class="card-body">
+              <div id="uploading-msg" class="text-sm muted" style="display:none;margin-bottom:8px;">Uploading…</div>
+              <div class="photos-grid" id="photos-grid">${renderPhotos(job.photo_urls||[])}</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="card">
+            <div class="card-head"><h3>Quick SMS</h3></div>
+            <div class="card-body">
+              <div class="sms-grid" id="sms-grid"></div>
+              ${customer.phone ? `
+                <div style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;font-weight:700;margin:14px 0 6px;padding-top:12px;border-top:1px solid var(--border);">Custom Message</div>
+                <div style="display:flex;gap:8px;">
+                  <textarea id="job-sms-text" rows="2" placeholder="Type a custom message to ${PS.fmt.escape((customer.name||"").split(" ")[0] || "the customer")}…" style="flex:1;padding:10px 12px;border:1px solid var(--border-strong);border-radius:10px;font-size:14px;outline:none;resize:none;font-family:inherit;"></textarea>
+                  <button class="btn btn-primary" onclick="sendCustomJobSMS()" style="align-self:flex-end;">Send</button>
+                </div>
+              ` : ""}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    buildSmsButtons();
+  }
+
+  function minsDiff(a, b) {
+    return Math.round((new Date(b) - new Date(a)) / 60000);
+  }
+  function renderPhotos(urls) {
+    if (!urls || !urls.length) return `<div class="empty" style="padding:1rem;">No photos yet.</div>`;
+    return urls.map((url, i) => `
+      <div class="photo-thumb">
+        <img src="${PS.fmt.escape(url)}" alt="Job photo" onclick="window.open('${PS.fmt.escape(url)}','_blank')">
+        <button class="photo-del" onclick="deletePhoto(${i})">✕</button>
+      </div>`).join("");
+  }
+
+  function buildSmsButtons() {
+    const phone = customer.phone;
+    const name = (customer.name||"").split(" ")[0] || "there";
+    const tech = customer.assigned_tech || "Josh";
+    const addr = customer.address || "your home";
+
+    const templates = [
+      { icon: "🚗", label: "On My Way — pick ETA", pickEta: true, msg: "" },
+      { icon: "✅", label: "Job Complete", msg: `Hi ${name}! Your yard has been cleaned up and is looking great 🐾✅ Have a great day! — ${tech}, Poop Savvy` },
+      { icon: "⏰", label: "Running Late", msg: `Hi ${name}! This is ${tech} from Poop Savvy 🐾 Just a heads up — I'm running a bit behind but I'm still coming. I'll be there soon, sorry for the delay!` },
+      { icon: "⏭️", label: "Skipping Today", msg: `Hi ${name}! This is ${tech} from Poop Savvy 🐾 I need to skip your service today. I'll make it up on the next visit. Sorry for the inconvenience!` },
+      { icon: "📅", label: "Reschedule Notice", msg: `Hi ${name}! This is ${tech} from Poop Savvy 🐾 I need to reschedule your service. I'll be in touch with a new date shortly!` },
+      { icon: "🔑", label: "Gate Access Issue", msg: `Hi ${name}! This is ${tech} from Poop Savvy 🐾 I'm having trouble accessing the gate at ${addr}. Could you help me get in? Reply or call me back. Thanks!` },
+      { icon: "🐕", label: "Dog Out / Safety", msg: `Hi ${name}! This is ${tech} from Poop Savvy 🐾 Heads up — I noticed a dog loose in the yard when I arrived. Please call or text me back!` },
+      { icon: "📍", label: "Tech Has Arrived", msg: `Hi ${name}! Your Poop Savvy tech ${tech} has arrived and is getting started! 🐾` },
+    ];
+
+    const grid = document.getElementById("sms-grid");
+    if (!phone) {
+      grid.innerHTML = `<div class="empty" style="padding:1rem;">No phone number on file.</div>`;
+      return;
+    }
+    window._smsTemplates = templates;
+    window._smsPhone = phone;
+    grid.innerHTML = templates.map((t, i) => {
+      const click = t.pickEta ? "document.getElementById('eta-overlay').classList.add('open')" : `sendJobSMS(${i})`;
+      const preview = t.pickEta ? "Pick an ETA (5–90 min)" : (t.msg.length > 60 ? t.msg.slice(0, 60) + "…" : t.msg);
+      return `<div class="sms-btn" onclick="${click}">
+        <div class="sms-icon">${t.icon}</div>
+        <div>
+          <div class="sms-label">${PS.fmt.escape(t.label)}</div>
+          <div class="sms-preview">${PS.fmt.escape(preview)}</div>
+        </div>
+      </div>`;
+    }).join("");
+  }
+
+  async function updateStatus(status) {
+    const now = new Date().toISOString();
+    const today = PS.fmt.today();
+    const patch = { status };
+    // Note: tech_name is *not* auto-stamped. It stays null unless the user
+    // explicitly sets a per-visit override via the Tech for this visit dropdown.
+    if (status === "En Route") { patch.en_route_at = now; }
+    if (status === "Arrived") patch.arrived_at = now;
+    if (status === "Completed") { patch.completed_date = today; patch.completed_at = now; }
+    if (status === "Scheduled") { patch.completed_date = null; }
+    try {
+      await PS.api.patch("schedules", `id=eq.${JOB_ID}`, patch);
+      Object.assign(job, patch);
+      const msgs = { "En Route": "🚗 En route!", "Arrived": "📍 Arrived!", "Completed": "✅ Complete!", "Skipped": "⏭️ Skipped", "Cancelled": "❌ Cancelled", "Scheduled": "Reset to scheduled" };
+      PS.toast(msgs[status] || status);
+      render();
+    } catch (e) { PS.toast("Status update failed: " + (e.message||e), "error"); }
+  }
+
+  function openReschedule() {
+    document.getElementById("reschedule-date").value = job.scheduled_date || "";
+    document.getElementById("reschedule-overlay").classList.add("open");
+  }
+  async function saveReschedule() {
+    const d = document.getElementById("reschedule-date").value;
+    if (!d) return PS.toast("Pick a date", "error");
+    try {
+      await PS.api.patch("schedules", `id=eq.${JOB_ID}`, { scheduled_date: d, status: "Scheduled" });
+      job.scheduled_date = d; job.status = "Scheduled";
+      document.getElementById("reschedule-overlay").classList.remove("open");
+      PS.toast("📅 Rescheduled"); render();
+    } catch (e) { PS.toast("Reschedule failed", "error"); }
+  }
+
+  async function saveTechOverride() {
+    const sel = document.getElementById("tech-override");
+    const v = sel && sel.value ? sel.value : null;
+    try {
+      await PS.api.patch("schedules", `id=eq.${JOB_ID}`, { tech_name: v });
+      job.tech_name = v;
+      PS.toast(v ? `Assigned this visit to ${v}` : "Using customer default tech");
+      render();
+    } catch (e) {
+      PS.toast("Could not update tech: " + (e.message||e), "error");
+    }
+  }
+
+  async function saveNotes() {
+    const notes = document.getElementById("visit-notes").value.trim() || null;
+    const completedNotes = document.getElementById("completed-notes").value.trim() || null;
+    try {
+      await PS.api.patch("schedules", `id=eq.${JOB_ID}`, { notes, completed_notes: completedNotes });
+      job.notes = notes; job.completed_notes = completedNotes;
+      PS.toast("💾 Notes saved");
+    } catch (e) { PS.toast("Save failed", "error"); }
+  }
+
+  async function deleteJob() {
+    if (!confirm("Delete this job?")) return;
+    try {
+      await PS.api.delete("schedules", `id=eq.${JOB_ID}`);
+      PS.toast("Deleted");
+      setTimeout(() => { window.location.href = backHref(); }, 500);
+    } catch (e) { PS.toast("Delete failed", "error"); }
+  }
+
+  // Photo upload — uses Supabase storage bucket "job-photos"
+  async function uploadPhotos(files) {
+    if (!files || !files.length) return;
+    document.getElementById("uploading-msg").style.display = "";
+    const uploaded = [];
+    const session = PS.auth.getSession();
+    const token = session?.access_token || PS.SUPA_ANON;
+    for (const file of files) {
+      try {
+        const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+        const path = `${JOB_ID}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const res = await fetch(`${PS.SUPA_URL}/storage/v1/object/job-photos/${path}`, {
+          method: "POST",
+          headers: { apikey: PS.SUPA_ANON, Authorization: "Bearer " + token, "Content-Type": file.type },
+          body: file,
+        });
+        if (res.ok) uploaded.push(`${PS.SUPA_URL}/storage/v1/object/public/job-photos/${path}`);
+      } catch (e) { /* ignore individual failures */ }
+    }
+    if (uploaded.length) {
+      const all = [...(job.photo_urls||[]), ...uploaded];
+      await PS.api.patch("schedules", `id=eq.${JOB_ID}`, { photo_urls: all });
+      job.photo_urls = all;
+      document.getElementById("photos-grid").innerHTML = renderPhotos(all);
+      PS.toast(`📸 ${uploaded.length} photo${uploaded.length>1?"s":""} uploaded`);
+    } else {
+      PS.toast("Upload failed", "error");
+    }
+    document.getElementById("uploading-msg").style.display = "none";
+    document.getElementById("photo-input").value = "";
+  }
+
+  async function deletePhoto(i) {
+    if (!confirm("Remove this photo?")) return;
+    const photos = [...(job.photo_urls||[])]; photos.splice(i, 1);
+    await PS.api.patch("schedules", `id=eq.${JOB_ID}`, { photo_urls: photos });
+    job.photo_urls = photos;
+    document.getElementById("photos-grid").innerHTML = renderPhotos(photos);
+    PS.toast("Photo removed");
+  }
+
+  function sendETA(min) {
+    document.getElementById("eta-overlay").classList.remove("open");
+    const name = (customer.name||"").split(" ")[0] || "there";
+    const tech = customer.assigned_tech || "Josh";
+    const msg = `Hi ${name}! This is ${tech} from Poop Savvy 🐾 I'm on my way and should be there in about ${min} minutes!`;
+    window.open(`sms:${customer.phone}?body=${encodeURIComponent(msg)}`);
+  }
+  function sendCustomETA() {
+    const v = parseInt(document.getElementById("custom-eta").value) || 0;
+    if (v > 0) sendETA(v);
+  }
+  function sendJobSMS(i) {
+    const t = window._smsTemplates[i];
+    if (!t || t.pickEta) return;
+    // Log then open native composer
+    if (customer.id) {
+      PS.api.insertMinimal("sms_log", {
+        customer_id: customer.id, to_number: window._smsPhone, message: t.msg,
+        direction: "outbound", status: "Sent"
+      }).catch(()=>{});
+    }
+    window.open(`sms:${window._smsPhone}?body=${encodeURIComponent(t.msg)}`);
+  }
+
+  async function sendCustomJobSMS() {
+    const ta = document.getElementById("job-sms-text");
+    const msg = ta && ta.value.trim();
+    if (!msg || !customer.phone) return;
+    try {
+      if (customer.id) {
+        await PS.api.insertMinimal("sms_log", {
+          customer_id: customer.id, to_number: customer.phone, message: msg,
+          direction: "outbound", status: "Sent"
+        });
+      }
+      ta.value = "";
+      PS.toast("Message logged");
+      window.open(`sms:${customer.phone}?body=${encodeURIComponent(msg)}`);
+    } catch (e) { PS.toast("Could not send", "error"); }
+  }
+
+  document.getElementById("reschedule-overlay").addEventListener("click", e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove("open"); });
+  document.getElementById("eta-overlay").addEventListener("click", e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove("open"); });
+
+  window.onAuthReady = load;
+</script>
+</body>
+</html>

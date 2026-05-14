@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Poop Savvy — Dashboard</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#0ea5e9">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Poop Savvy">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="stylesheet" href="app.css">
+<style>
+  .hero {
+    background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+    color: #fff;
+    border-radius: var(--radius-lg);
+    padding: 22px 24px;
+    margin-bottom: 18px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 14px;
+    box-shadow: 0 10px 40px rgba(14,165,233,0.22);
+  }
+  .hero h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+  .hero .greeting { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+  .hero-meta { display: flex; gap: 18px; font-size: 13px; opacity: 0.95; flex-wrap: wrap; }
+  .hero-meta b { font-size: 20px; display: block; font-weight: 800; letter-spacing: -0.02em; }
+  .today-panel {
+    display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 18px;
+  }
+  .today-panel .card { padding: 18px; }
+  .today-list { display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow-y: auto; }
+  .today-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 10px 12px; border-radius: 10px; background: var(--surface-2);
+    border: 1px solid var(--border);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .today-row:hover { border-color: var(--accent-100); background: var(--accent-50); }
+  .today-row .who { font-weight: 600; color: var(--text); }
+  .today-row .where { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .hot-leads .lead-row {
+    padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--surface-2);
+    margin-bottom: 8px; cursor: pointer; transition: all 0.15s;
+  }
+  .hot-leads .lead-row:hover { border-color: var(--accent-100); background: var(--accent-50); }
+  .hot-leads .name { font-weight: 600; color: var(--text); }
+  .hot-leads .meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .metrics-row {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 18px; margin-bottom: 18px;
+    display: grid; grid-template-columns: 2fr repeat(4, 1fr); gap: 18px; align-items: center;
+  }
+  .metrics-row .mr-title { font-size: 13px; font-weight: 700; color: var(--text); }
+  .metrics-row .mr-title small { display: block; font-size: 11px; color: var(--text-muted); font-weight: 500; }
+  .metrics-row select { margin-top: 6px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-strong); font-size: 12px; background: #fff; }
+  .metric-box .m-label { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+  .metric-box .m-val { font-size: 22px; font-weight: 800; color: var(--text); letter-spacing: -0.02em; }
+  .metric-box .m-sub { font-size: 11px; color: var(--text-muted); }
+  @media (max-width: 900px) {
+    .today-panel { grid-template-columns: 1fr; }
+    .metrics-row { grid-template-columns: 1fr 1fr; }
+    .metrics-row .mr-title { grid-column: 1 / -1; }
+  }
+</style>
+</head>
+<body data-page="index">
+<nav class="app-nav" id="app-nav"></nav>
+
+<div class="container">
+  <div class="hero">
+    <div>
+      <h1 id="greet">Good day</h1>
+      <div class="greeting" id="today-str">—</div>
+    </div>
+    <div class="hero-meta">
+      <div><span id="h-today" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;opacity:.8;">Today</span><b id="h-today-val">—</b><span style="opacity:.8;">visits</span></div>
+      <div><span style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;opacity:.8;">This Week</span><b id="h-week-val">—</b><span style="opacity:.8;">scheduled</span></div>
+      <div><span style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;opacity:.8;">Active Clients</span><b id="h-active-val">—</b><span style="opacity:.8;">customers</span></div>
+      <div><span style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;opacity:.8;">Monthly Revenue</span><b id="h-rev-val">—</b><span style="opacity:.8;">recurring</span></div>
+    </div>
+  </div>
+
+  <!-- CUSTOMERS -->
+  <div class="section-label"><span>👥 Customers</span><a href="customers.html" class="link" style="color:var(--accent);font-size:12px;font-weight:600;text-decoration:none;">View all →</a></div>
+  <div class="kpi-grid">
+    <div class="kpi accent"><div class="kpi-icon">👥</div><div class="kpi-label">Total</div><div class="kpi-val" id="c-total">—</div><div class="kpi-sub">all customers</div></div>
+    <div class="kpi green"><div class="kpi-icon">✅</div><div class="kpi-label">Active</div><div class="kpi-val" id="c-active">—</div><div class="kpi-sub">currently serviced</div></div>
+    <div class="kpi amber"><div class="kpi-icon">⏸️</div><div class="kpi-label">Paused</div><div class="kpi-val" id="c-paused">—</div><div class="kpi-sub">on hold</div></div>
+    <div class="kpi red"><div class="kpi-icon">❌</div><div class="kpi-label">Cancelled</div><div class="kpi-val" id="c-cancelled">—</div><div class="kpi-sub">churned</div></div>
+  </div>
+
+  <!-- REVENUE -->
+  <div class="section-label">💰 Revenue</div>
+  <div class="kpi-grid">
+    <div class="kpi green"><div class="kpi-icon">💵</div><div class="kpi-label">Monthly</div><div class="kpi-val" id="r-monthly">—</div><div class="kpi-sub">active customers</div></div>
+    <div class="kpi green"><div class="kpi-icon">📅</div><div class="kpi-label">Annual Run Rate</div><div class="kpi-val" id="r-annual">—</div><div class="kpi-sub">projected</div></div>
+    <div class="kpi accent"><div class="kpi-icon">🧾</div><div class="kpi-label">Avg / Customer</div><div class="kpi-val" id="r-avg">—</div><div class="kpi-sub">per month</div></div>
+  </div>
+
+  <!-- TODAY + HOT LEADS -->
+  <div class="today-panel">
+    <div class="card">
+      <div class="card-head">
+        <h3>🏃 Today's Stops</h3>
+        <a class="link" href="routes.html">Open route →</a>
+      </div>
+      <div class="card-body">
+        <div class="today-list" id="today-list"><div class="loading">Loading…</div></div>
+      </div>
+    </div>
+    <div class="card hot-leads">
+      <div class="card-head">
+        <h3>🔥 Hot Leads</h3>
+        <a class="link" href="leads.html">See all →</a>
+      </div>
+      <div class="card-body">
+        <div id="hot-leads"><div class="loading">Loading…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FREQUENCY -->
+  <div class="section-label">🔁 Service Frequency</div>
+  <div class="kpi-grid">
+    <div class="kpi purple"><div class="kpi-icon">⚡</div><div class="kpi-label">Weekly</div><div class="kpi-val" id="f-weekly">—</div><div class="kpi-sub" id="f-weekly-pct"></div><div class="progress"><div class="progress-fill" id="f-weekly-bar" style="width:0%"></div></div></div>
+    <div class="kpi purple"><div class="kpi-icon">📆</div><div class="kpi-label">Every Other Week</div><div class="kpi-val" id="f-biweekly">—</div><div class="kpi-sub" id="f-biweekly-pct"></div><div class="progress"><div class="progress-fill" id="f-biweekly-bar" style="width:0%"></div></div></div>
+    <div class="kpi purple"><div class="kpi-icon">🗓️</div><div class="kpi-label">Monthly</div><div class="kpi-val" id="f-monthly">—</div><div class="kpi-sub" id="f-monthly-pct"></div><div class="progress"><div class="progress-fill" id="f-monthly-bar" style="width:0%"></div></div></div>
+  </div>
+
+  <!-- SCHEDULE -->
+  <div class="section-label">📋 Schedule</div>
+  <div class="kpi-grid">
+    <div class="kpi accent"><div class="kpi-icon">📋</div><div class="kpi-label">Total Jobs</div><div class="kpi-val" id="s-total">—</div><div class="kpi-sub">all time</div></div>
+    <div class="kpi green"><div class="kpi-icon">✅</div><div class="kpi-label">Completed</div><div class="kpi-val" id="s-completed">—</div><div class="kpi-sub" id="s-completed-pct"></div></div>
+    <div class="kpi amber"><div class="kpi-icon">⏳</div><div class="kpi-label">Upcoming</div><div class="kpi-val" id="s-upcoming">—</div><div class="kpi-sub">scheduled ahead</div></div>
+    <div class="kpi red"><div class="kpi-icon">⏭️</div><div class="kpi-label">Skipped</div><div class="kpi-val" id="s-skipped">—</div><div class="kpi-sub">total</div></div>
+  </div>
+
+  <!-- THIS PERIOD -->
+  <div class="section-label">📅 This Period</div>
+  <div class="kpi-grid">
+    <div class="kpi accent"><div class="kpi-icon">☀️</div><div class="kpi-label">Today</div><div class="kpi-val" id="p-today">—</div><div class="kpi-sub" id="p-today-done"></div></div>
+    <div class="kpi accent"><div class="kpi-icon">📅</div><div class="kpi-label">This Week</div><div class="kpi-val" id="p-week">—</div><div class="kpi-sub">scheduled</div></div>
+    <div class="kpi accent"><div class="kpi-icon">🗓️</div><div class="kpi-label">This Month</div><div class="kpi-val" id="p-month">—</div><div class="kpi-sub">scheduled</div></div>
+    <div class="kpi green"><div class="kpi-icon">✅</div><div class="kpi-label">Done This Month</div><div class="kpi-val" id="p-month-done">—</div><div class="kpi-sub">completed so far</div></div>
+  </div>
+
+  <!-- LEADS -->
+  <div class="section-label">🎯 Leads</div>
+  <div class="kpi-grid">
+    <div class="kpi accent"><div class="kpi-icon">🎯</div><div class="kpi-label">Total</div><div class="kpi-val" id="l-total">—</div><div class="kpi-sub">all time</div></div>
+    <div class="kpi amber"><div class="kpi-icon">🔥</div><div class="kpi-label">New</div><div class="kpi-val" id="l-new">—</div><div class="kpi-sub">need follow-up</div></div>
+    <div class="kpi green"><div class="kpi-icon">💬</div><div class="kpi-label">Contacted</div><div class="kpi-val" id="l-contacted">—</div><div class="kpi-sub">in flight</div></div>
+    <div class="kpi purple"><div class="kpi-icon">📈</div><div class="kpi-label">Close Rate</div><div class="kpi-val" id="l-rate">—</div><div class="kpi-sub">leads → customers</div></div>
+  </div>
+
+  <!-- FIELD METRICS -->
+  <div class="metrics-row">
+    <div>
+      <div class="mr-title">🏃 Field Metrics <small>Avg minutes per stop, by tech</small></div>
+      <select id="tech-filter" onchange="renderMetrics()">
+        <option value="all">All Techs</option>
+        <option value="Josh">Josh</option>
+        <option value="Dee">Dee</option>
+        <option value="Drake">Drake</option>
+      </select>
+    </div>
+    <div class="metric-box"><div class="m-label">Drive</div><div class="m-val" id="m-drive">—</div><div class="m-sub">min</div></div>
+    <div class="metric-box"><div class="m-label">Scoop</div><div class="m-val" id="m-scoop">—</div><div class="m-sub">min</div></div>
+    <div class="metric-box"><div class="m-label">Total</div><div class="m-val" id="m-total">—</div><div class="m-sub">min</div></div>
+    <div class="metric-box"><div class="m-label">Jobs Tracked</div><div class="m-val" id="m-tracked">—</div><div class="m-sub">with timestamps</div></div>
+  </div>
+</div>
+
+<nav class="tab-bar" id="tab-bar"></nav>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="app.js"></script>
+<script>
+  function greetingPrefix(d) {
+    const h = d.getHours();
+    if (h < 12) return "Good morning";
+    if (h < 17) return "Good afternoon";
+    return "Good evening";
+  }
+
+  let allSchedules = [];
+
+  function calcMins(start, end) {
+    if (!start || !end) return null;
+    const m = Math.round((new Date(end) - new Date(start)) / 60000);
+    return m > 0 && m < 480 ? m : null;
+  }
+
+  function renderMetrics() {
+    const tech = document.getElementById("tech-filter").value;
+    const todayStr = PS.fmt.today();
+    let jobs = allSchedules.filter(s => s.en_route_at && s.arrived_at && s.completed_at);
+    if (tech !== "all") jobs = jobs.filter(s => s.tech_name === tech);
+
+    const drives = jobs.map(s => calcMins(s.en_route_at, s.arrived_at));
+    const scoops = jobs.map(s => calcMins(s.arrived_at, s.completed_at));
+    const totals = jobs.map(s => calcMins(s.en_route_at, s.completed_at));
+    const avg = arr => { const v = arr.filter(x => x !== null); return v.length ? Math.round(v.reduce((a,b)=>a+b,0)/v.length) : "—"; };
+
+    document.getElementById("m-drive").textContent = avg(drives);
+    document.getElementById("m-scoop").textContent = avg(scoops);
+    document.getElementById("m-total").textContent = avg(totals);
+    document.getElementById("m-tracked").textContent = jobs.length;
+  }
+
+  async function loadDashboard() {
+    const now = new Date();
+    const user = PS.auth.getUser();
+    const firstName = (user?.user_metadata?.full_name || user?.email || "").split(/\s|@/)[0] || "there";
+    document.getElementById("greet").textContent = `${greetingPrefix(now)}, ${firstName}!`;
+    document.getElementById("today-str").textContent = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+
+    const [customers, schedules, leads] = await Promise.all([
+      PS.api.select("customers", "select=id,name,address,city,phone,service_status,service_frequency,monthly_rate,dogs_count,assigned_tech").catch(()=>[]),
+      PS.api.select("schedules", "select=id,customer_id,status,scheduled_date,completed_date,en_route_at,arrived_at,completed_at,tech_name,customers(name,address,city,dogs_count)").catch(()=>[]),
+      PS.api.select("leads", "select=id,first_name,last_name,phone,city,status,created_at&order=created_at.desc").catch(()=>[]),
+    ]);
+    allSchedules = schedules;
+
+    // Customers
+    const active = customers.filter(c => c.service_status === "active");
+    const paused = customers.filter(c => c.service_status === "paused");
+    const cancelled = customers.filter(c => c.service_status === "cancelled");
+    document.getElementById("c-total").textContent = customers.length;
+    document.getElementById("c-active").textContent = active.length;
+    document.getElementById("c-paused").textContent = paused.length;
+    document.getElementById("c-cancelled").textContent = cancelled.length;
+
+    // Revenue
+    const monthlyRev = active.reduce((s, c) => s + (parseFloat(c.monthly_rate) || 0), 0);
+    const avgRate = active.length ? monthlyRev / active.length : 0;
+    document.getElementById("r-monthly").textContent = PS.fmt.money(monthlyRev, false);
+    document.getElementById("r-annual").textContent = PS.fmt.money(monthlyRev * 12, false);
+    document.getElementById("r-avg").textContent = PS.fmt.money(avgRate, false);
+
+    // Frequency
+    const total = active.length || 1;
+    const weekly = active.filter(c => c.service_frequency === "Weekly").length;
+    const biweekly = active.filter(c => c.service_frequency === "Every Other Week").length;
+    const monthly = active.filter(c => c.service_frequency === "Monthly").length;
+    const setPct = (id, v) => {
+      const pct = total ? Math.round((v / total) * 100) : 0;
+      document.getElementById(id + "-pct").textContent = pct + "% of active";
+      document.getElementById(id + "-bar").style.width = pct + "%";
+    };
+    document.getElementById("f-weekly").textContent = weekly;
+    document.getElementById("f-biweekly").textContent = biweekly;
+    document.getElementById("f-monthly").textContent = monthly;
+    setPct("f-weekly", weekly); setPct("f-biweekly", biweekly); setPct("f-monthly", monthly);
+
+    // Schedule
+    const todayStr = PS.fmt.today();
+    const weekStart = PS.fmt.weekStartKey(todayStr);
+    const weekEnd = PS.fmt.addDateDays(weekStart, 6);
+    const monthStart = todayStr.slice(0, 8) + "01";
+    const monthEnd = PS.fmt.monthEndKey(todayStr);
+
+    const completed = schedules.filter(s => s.status === "Completed");
+    const upcoming = schedules.filter(s => s.status === "Scheduled" && s.scheduled_date >= todayStr);
+    const skipped = schedules.filter(s => s.status === "Skipped");
+    const completedPct = schedules.length ? Math.round((completed.length / schedules.length) * 100) : 0;
+
+    document.getElementById("s-total").textContent = schedules.length;
+    document.getElementById("s-completed").textContent = completed.length;
+    document.getElementById("s-completed-pct").textContent = completedPct + "% completion rate";
+    document.getElementById("s-upcoming").textContent = upcoming.length;
+    document.getElementById("s-skipped").textContent = skipped.length;
+
+    // Period
+    const todayVisits = schedules.filter(s => s.scheduled_date === todayStr && s.status !== "Cancelled");
+    const todayDone = todayVisits.filter(s => s.status === "Completed").length;
+    const weekVisits = schedules.filter(s => s.scheduled_date >= weekStart && s.scheduled_date <= weekEnd && s.status !== "Cancelled");
+    const monthVisits = schedules.filter(s => s.scheduled_date >= monthStart && s.scheduled_date <= monthEnd && s.status !== "Cancelled");
+    const monthDone = monthVisits.filter(s => s.status === "Completed").length;
+
+    document.getElementById("p-today").textContent = todayVisits.length;
+    document.getElementById("p-today-done").textContent = `${todayDone} completed`;
+    document.getElementById("p-week").textContent = weekVisits.length;
+    document.getElementById("p-month").textContent = monthVisits.length;
+    document.getElementById("p-month-done").textContent = monthDone;
+
+    // Hero meta
+    document.getElementById("h-today-val").textContent = todayVisits.length;
+    document.getElementById("h-week-val").textContent = weekVisits.length;
+    document.getElementById("h-active-val").textContent = active.length;
+    document.getElementById("h-rev-val").textContent = PS.fmt.money(monthlyRev, false);
+
+    // Today's list
+    const list = document.getElementById("today-list");
+    const todaySorted = todayVisits.slice().sort((a,b)=> (a.status==="Scheduled"?-1:1) - (b.status==="Scheduled"?-1:1));
+    if (!todaySorted.length) {
+      list.innerHTML = `<div class="empty" style="padding:1.5rem;"><div class="empty-title">Nothing scheduled today 🎉</div><div>Enjoy the break or add a visit from the Schedule.</div></div>`;
+    } else {
+      list.innerHTML = todaySorted.map(s => {
+        const c = s.customers || {};
+        const badge = `<span class="badge badge-${(s.status||"Scheduled").replace(/\s/g,'')}">${s.status||"Scheduled"}</span>`;
+        return `<div class="today-row" onclick="window.location='job-detail.html?id=${s.id}&from=dashboard'">
+          <div>
+            <div class="who">${PS.fmt.escape(c.name || "Customer")}</div>
+            <div class="where">${PS.fmt.escape([c.address, c.city].filter(Boolean).join(", "))}${c.dogs_count?` · ${c.dogs_count} dog${c.dogs_count>1?'s':''}`:''}</div>
+          </div>
+          ${badge}
+        </div>`;
+      }).join("");
+    }
+
+    // Hot leads
+    const hot = leads.filter(l => l.status === "New" || l.status === "Contacted").slice(0, 6);
+    const hotEl = document.getElementById("hot-leads");
+    if (!hot.length) {
+      hotEl.innerHTML = `<div class="empty" style="padding:1rem;"><div>No hot leads right now.</div></div>`;
+    } else {
+      hotEl.innerHTML = hot.map(l => {
+        const name = [l.first_name, l.last_name].filter(Boolean).join(" ") || "Unnamed";
+        return `<div class="lead-row" onclick="window.location='lead-detail.html?id=${l.id}'">
+          <div class="name">${PS.fmt.escape(name)}</div>
+          <div class="meta">
+            <span>${PS.fmt.escape(l.phone || "no phone")}</span>
+            ${l.city ? `<span>· ${PS.fmt.escape(l.city)}</span>` : ""}
+            <span>· <span class="badge badge-${l.status||"New"}">${l.status||"New"}</span></span>
+          </div>
+        </div>`;
+      }).join("");
+    }
+
+    // Leads KPIs
+    const lNew = leads.filter(l => !l.status || l.status === "New").length;
+    const lContacted = leads.filter(l => l.status === "Contacted").length;
+    const lWon = leads.filter(l => l.status === "Won").length;
+    const closeRate = leads.length ? Math.round((lWon / leads.length) * 100) : 0;
+    document.getElementById("l-total").textContent = leads.length;
+    document.getElementById("l-new").textContent = lNew;
+    document.getElementById("l-contacted").textContent = lContacted;
+    document.getElementById("l-rate").textContent = closeRate + "%";
+
+    renderMetrics();
+  }
+
+  window.onAuthReady = loadDashboard;
+</script>
+</body>
+</html>

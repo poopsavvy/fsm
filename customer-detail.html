@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Poop Savvy — Customer</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#0ea5e9">
+<link rel="stylesheet" href="app.css">
+<style>
+  .detail-grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 980px) { .detail-grid { grid-template-columns: 1fr; } }
+  .hero-card {
+    background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+    color: #fff; border-radius: var(--radius-lg);
+    padding: 20px 22px; display: flex; justify-content: space-between; gap: 14px;
+    flex-wrap: wrap; margin-bottom: 14px;
+    box-shadow: 0 10px 30px rgba(14,165,233,0.22);
+  }
+  .hero-card h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
+  .hero-meta { display: flex; gap: 16px; font-size: 13px; opacity: 0.95; flex-wrap: wrap; }
+  .hero-meta b { font-size: 20px; display: block; font-weight: 800; }
+  .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .info-item .k { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+  .info-item .v { font-size: 14px; color: var(--text); margin-top: 3px; font-weight: 500; }
+  .gate-code {
+    background: var(--amber-50); color: var(--amber-700);
+    padding: 6px 12px; border-radius: 8px;
+    font-weight: 700; display: inline-block;
+    font-family: ui-monospace, monospace;
+  }
+  .yard-box {
+    background: #fffbeb; border: 1px solid #fde68a;
+    border-radius: 10px; padding: 10px 14px;
+    font-size: 13px; color: #78350f;
+  }
+  .visit-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 2px; border-bottom: 1px solid var(--border); font-size: 14px;
+  }
+  .visit-row:last-child { border-bottom: 0; }
+  .sched-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface-2); margin-bottom: 6px; cursor: pointer; transition: background 0.15s;
+  }
+  .sched-row:hover { background: var(--accent-50); }
+  .sms-thread { display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow-y: auto; padding: 6px 0; }
+  .sms-bubble { max-width: 78%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.45; }
+  .sms-out { background: var(--accent); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .sms-in  { background: #f1f5f9; color: var(--text); align-self: flex-start; border-bottom-left-radius: 4px; }
+  .sms-time { font-size: 11px; opacity: 0.7; margin-top: 3px; }
+  .sms-compose { display: flex; gap: 8px; margin-top: 10px; }
+  .sms-compose textarea {
+    flex: 1; padding: 10px 12px; border: 1px solid var(--border-strong);
+    border-radius: 10px; font-size: 14px; outline: none; resize: none;
+  }
+  .sms-compose textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(14,165,233,0.15); }
+  .save-bar {
+    position: sticky; bottom: 12px;
+    background: #fff; border: 1px solid var(--border); border-radius: 14px;
+    padding: 10px 14px; display: flex; justify-content: flex-end; gap: 8px;
+    box-shadow: 0 10px 30px rgba(15,23,42,0.08);
+    margin-top: 14px;
+  }
+  @media (max-width: 768px) {
+    .save-bar { position: fixed; bottom: calc(var(--tabbar-h) + 8px); left: 12px; right: 12px; z-index: 30; }
+  }
+  .add-visit-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .add-visit-row input {
+    flex: 1; min-width: 110px;
+    padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: 8px; font-size: 14px; outline: none;
+  }
+  .regen-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+  .regen-row input[type=date] { padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: 8px; font-size: 14px; outline: none; }
+</style>
+</head>
+<body data-page="customers">
+<nav class="app-nav" id="app-nav"></nav>
+
+<div class="container" id="main">
+  <div class="loading">Loading customer…</div>
+</div>
+
+<nav class="tab-bar" id="tab-bar"></nav>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="app.js"></script>
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const custId = params.get("id");
+  let customer = null;
+  let schedules = [];
+
+  async function load() {
+    if (!custId) return err("No customer ID.");
+    try {
+      const [custs, visits, sms, sch] = await Promise.all([
+        PS.api.select("customers", `id=eq.${custId}&limit=1`).catch(()=>[]),
+        PS.api.select("visits", `customer_id=eq.${custId}&order=visit_date.desc&limit=20`).catch(()=>[]),
+        PS.api.select("sms_log", `customer_id=eq.${custId}&order=created_at.asc`).catch(()=>[]),
+        PS.api.select("schedules", `customer_id=eq.${custId}&order=scheduled_date.asc&limit=200`).catch(()=>[]),
+      ]);
+      if (!custs?.length) return err("Customer not found.");
+      customer = custs[0]; schedules = sch || [];
+      render(visits || [], sms || [], schedules);
+    } catch (e) { err("Could not load: " + (e.message||e)); }
+  }
+  function err(msg) {
+    document.getElementById("main").innerHTML = `
+      <a class="back-link" href="customers.html">← Back to Customers</a>
+      <div class="card"><div class="card-body" style="color:var(--red-700);">${PS.fmt.escape(msg)}</div></div>`;
+  }
+
+  function render(visits, sms, schedules) {
+    const c = customer;
+    const st = c.service_status || "active";
+    const since = c.member_since ? PS.fmt.date(c.member_since) : "—";
+    const rate = c.monthly_rate ? parseFloat(c.monthly_rate).toFixed(2) : PS.pricing.calcPrice(c.dogs_count||1, c.service_frequency||"Weekly").toFixed(2);
+    const dogs = c.dogs_count || 1;
+    const freq = c.service_frequency || "Weekly";
+
+    const completed = schedules.filter(s => s.status === "Completed").length;
+    const upcoming = schedules.filter(s => s.status === "Scheduled" && s.scheduled_date >= PS.fmt.today());
+
+    const today = PS.fmt.today();
+    const visitRows = visits.length
+      ? visits.map(v => `<div class="visit-row">
+          <div>
+            <div style="font-weight:600;">${PS.fmt.dateLong(v.visit_date)}</div>
+            ${v.notes?`<div class="text-sm muted">${PS.fmt.escape(v.notes)}</div>`:""}
+          </div>
+          <span style="color:var(--green);font-size:18px;">✓</span>
+        </div>`).join("")
+      : `<div class="empty" style="padding:1.25rem;">No visits logged yet.</div>`;
+
+    const next = upcoming.slice(0, 10);
+    const schedRows = next.length
+      ? next.map(s => `<div class="sched-row" onclick="window.location='job-detail.html?id=${s.id}&from=customer&cid=${custId}'">
+          <div style="font-weight:600;">${PS.fmt.dateLong(s.scheduled_date)}</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span class="badge badge-${(s.status||"Scheduled").replace(/\s/g,'')}">${s.status||"Scheduled"}</span>
+            <span style="font-size:12px;color:var(--accent);font-weight:600;">View →</span>
+          </div>
+        </div>`).join("")
+      : `<div class="empty" style="padding:1.25rem;">No upcoming jobs.</div>`;
+
+    const smsRows = sms.length
+      ? sms.map(m => `<div style="display:flex;flex-direction:column;align-items:${m.direction==='outbound'?'flex-end':'flex-start'};">
+          <div class="sms-bubble ${m.direction==='outbound'?'sms-out':'sms-in'}">${PS.fmt.escape(m.message||"")}</div>
+          <div class="sms-time" style="text-align:${m.direction==='outbound'?'right':'left'};color:var(--text-faint);">
+            ${PS.fmt.dateTime(m.created_at)}</div>
+        </div>`).join("")
+      : `<div class="empty" style="padding:1rem;">No messages yet.</div>`;
+
+    document.getElementById("main").innerHTML = `
+      <a class="back-link" href="customers.html">← Back to Customers</a>
+
+      <div class="hero-card">
+        <div>
+          <h1 id="display-name">${PS.fmt.escape(c.name||"—")}</h1>
+          <div style="margin-top:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <span class="badge badge-${st}" id="status-badge" style="background:rgba(255,255,255,0.22);color:#fff;">${st.charAt(0).toUpperCase()+st.slice(1)}</span>
+            <span style="opacity:0.95;">Since ${since}</span>
+            <span style="opacity:0.95;">· ${dogs} dog${dogs>1?"s":""} · ${PS.fmt.escape(freq)}</span>
+          </div>
+        </div>
+        <div class="hero-meta">
+          <div><span style="opacity:.85;">Monthly</span><b id="hero-rate">$${rate}</b></div>
+          <div><span style="opacity:.85;">Completed</span><b>${completed}</b></div>
+          <div><span style="opacity:.85;">Upcoming</span><b>${upcoming.length}</b></div>
+        </div>
+      </div>
+
+      <div class="page-actions" style="margin-bottom:14px;flex-wrap:wrap;">
+        ${c.phone ? `<a class="btn btn-secondary" href="tel:${c.phone}">☎ Call</a>` : ""}
+        ${c.phone ? `<button class="btn btn-secondary" onclick="smsCust()">📱 SMS</button>` : ""}
+        ${c.email ? `<button class="btn btn-success" onclick="emailCust()">✉ Email</button>` : ""}
+        ${c.address ? `<a class="btn btn-secondary" target="_blank" rel="noopener" href="https://maps.google.com/?q=${encodeURIComponent([c.address, c.city, c.zip].filter(Boolean).join(", "))}">🗺️ Directions</a>` : ""}
+        <button class="btn btn-danger" onclick="deleteCustomer()">Delete</button>
+      </div>
+
+      <div class="detail-grid">
+        <div>
+          <div class="card mt-1">
+            <div class="card-head"><h3>Customer Info</h3></div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="form-group form-full"><label>Full name *</label><input id="f-name" type="text" value="${PS.fmt.escape(c.name||"")}"></div>
+                <div class="form-group"><label>Phone</label><input id="f-phone" type="tel" value="${PS.fmt.escape(c.phone||"")}"></div>
+                <div class="form-group"><label>Email</label><input id="f-email" type="email" value="${PS.fmt.escape(c.email||"")}"></div>
+                <div class="form-group form-full"><label>Address</label><input id="f-address" type="text" value="${PS.fmt.escape(c.address||"")}"></div>
+                <div class="form-group"><label>City</label><input id="f-city" type="text" value="${PS.fmt.escape(c.city||"DeSoto")}"></div>
+                <div class="form-group"><label>Zip</label><input id="f-zip" type="text" value="${PS.fmt.escape(c.zip||"")}"></div>
+                <div class="form-group"><label>Gate code</label><input id="f-gate" type="text" value="${PS.fmt.escape(c.gate_code||"")}"></div>
+                <div class="form-group"><label># Dogs</label>
+                  <select id="f-dogs" onchange="calcRate()">
+                    ${[1,2,3,4,5].map(n=>`<option value="${n}"${n===dogs?" selected":""}>${n}</option>`).join("")}
+                  </select>
+                </div>
+                <div class="form-group"><label>Frequency</label>
+                  <select id="f-freq" onchange="calcRate()">
+                    ${["Weekly","Every Other Week","Monthly"].map(s=>`<option${s===freq?" selected":""}>${s}</option>`).join("")}
+                  </select>
+                </div>
+                <div class="form-group"><label>Monthly rate</label>
+                  <div class="rate-display" id="f-rate-display">$${rate}/mo</div>
+                </div>
+                <div class="form-group"><label>Start date</label><input id="f-start" type="date" value="${c.start_date||c.member_since||""}"></div>
+                <div class="form-group"><label>Status</label>
+                  <select id="f-status" onchange="updateBadge(this.value)">
+                    ${["active","paused","cancelled"].map(s=>`<option${s===st?" selected":""}>${s}</option>`).join("")}
+                  </select>
+                </div>
+                <div class="form-group"><label>Billing</label>
+                  <select id="f-billing">
+                    <option value="paypal"${c.billing_platform==='paypal'?' selected':''}>PayPal</option>
+                    <option value="quickbooks"${c.billing_platform==='quickbooks'?' selected':''}>QuickBooks</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Tech</label>
+                  <select id="f-tech">
+                    ${["Josh","Dee","Drake"].map(t=>`<option${t===(c.assigned_tech||"Josh")?" selected":""}>${t}</option>`).join("")}
+                  </select>
+                </div>
+                <div class="form-group form-full"><label>Yard / access notes</label>
+                  <textarea id="f-yard" rows="3" placeholder="Dog names, gate info, yard notes…">${PS.fmt.escape(c.yard_notes||"")}</textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="card mt-1">
+            <div class="card-head"><h3>Upcoming Schedule</h3><span class="text-sm muted">Next ${next.length} of ${upcoming.length}</span></div>
+            <div class="card-body">
+              ${schedRows}
+              <div class="regen-row">
+                <span class="text-sm muted">Regenerate from:</span>
+                <input type="date" id="regen-start" value="${c.start_date||PS.fmt.today()}">
+                <button class="btn btn-primary btn-sm" onclick="regenSchedule()">+ Year</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteAllSchedules()">Wipe Scheduled</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card mt-2">
+            <div class="card-head"><h3>Visit History</h3><span class="text-sm muted">${visits.length} most recent</span></div>
+            <div class="card-body">
+              ${visitRows}
+              <div class="add-visit-row">
+                <input type="date" id="visit-date" value="${today}">
+                <input type="text" id="visit-note" placeholder="Optional note…" style="flex:2;">
+                <button class="btn btn-primary btn-sm" onclick="logVisit()">+ Log</button>
+              </div>
+            </div>
+          </div>
+
+          ${c.phone ? `
+          <div class="card mt-2">
+            <div class="card-head"><h3>SMS</h3></div>
+            <div class="card-body">
+              <div class="sms-thread" id="sms-thread">${smsRows}</div>
+              <div class="sms-compose">
+                <textarea id="sms-text" rows="2" placeholder="Message ${PS.fmt.escape((c.name||"").split(" ")[0])}…"></textarea>
+                <button class="btn btn-primary" onclick="sendSMS()">Send</button>
+              </div>
+            </div>
+          </div>` : ""}
+        </div>
+      </div>
+
+      <div class="save-bar">
+        <a class="btn btn-ghost" href="customers.html">Cancel</a>
+        <button class="btn btn-primary" onclick="saveCustomer()">Save Changes</button>
+      </div>
+    `;
+  }
+
+  function calcRate() {
+    const d = document.getElementById("f-dogs").value;
+    const f = document.getElementById("f-freq").value;
+    const p = PS.pricing.calcPrice(d, f);
+    document.getElementById("f-rate-display").textContent = `$${p.toFixed(2)}/mo`;
+  }
+  function updateBadge(v) {
+    const b = document.getElementById("status-badge");
+    b.className = `badge badge-${v}`;
+    b.style.background = "rgba(255,255,255,0.22)"; b.style.color = "#fff";
+    b.textContent = v.charAt(0).toUpperCase() + v.slice(1);
+  }
+
+  async function saveCustomer() {
+    const freq = document.getElementById("f-freq").value;
+    const dogs = parseInt(document.getElementById("f-dogs").value) || 1;
+    const rate = PS.pricing.calcPrice(dogs, freq);
+    const payload = {
+      name:       document.getElementById("f-name").value.trim(),
+      phone:      document.getElementById("f-phone").value.trim(),
+      email:      document.getElementById("f-email").value.trim(),
+      address:    document.getElementById("f-address").value.trim(),
+      city:       document.getElementById("f-city").value.trim(),
+      zip:        document.getElementById("f-zip").value.trim(),
+      gate_code:  document.getElementById("f-gate").value.trim() || null,
+      dogs_count: dogs, service_frequency: freq, monthly_rate: rate,
+      start_date: document.getElementById("f-start").value || null,
+      service_status: document.getElementById("f-status").value,
+      billing_platform: document.getElementById("f-billing").value,
+      assigned_tech: document.getElementById("f-tech").value,
+      yard_notes: document.getElementById("f-yard").value.trim() || null,
+    };
+    if (!payload.name) return PS.toast("Name is required", "error");
+    try {
+      await PS.api.patch("customers", `id=eq.${custId}`, payload);
+      Object.assign(customer, payload);
+      document.getElementById("display-name").textContent = payload.name;
+      document.getElementById("hero-rate").textContent = `$${rate.toFixed(2)}`;
+      updateBadge(payload.service_status);
+      PS.toast("Saved!");
+    } catch (e) { PS.toast("Save failed: " + (e.message||e), "error"); }
+  }
+
+  async function deleteCustomer() {
+    if (!confirm(`Delete ${customer.name}? This cannot be undone.`)) return;
+    try {
+      await PS.api.delete("customers", `id=eq.${custId}`);
+      PS.toast("Deleted");
+      setTimeout(() => window.location.href = "customers.html", 600);
+    } catch (e) { PS.toast("Delete failed", "error"); }
+  }
+
+  async function regenSchedule() {
+    const start = document.getElementById("regen-start").value;
+    const freq = document.getElementById("f-freq").value;
+    if (!start) return PS.toast("Pick a start date", "error");
+    if (!confirm(`Add a full year of ${freq} jobs starting ${start}?`)) return;
+    try {
+      const dates = PS.pricing.generateScheduleDates(start, freq);
+      const recs = dates.map(d => ({ customer_id: custId, scheduled_date: d, service_type: "Poop Scoop", status: "Scheduled" }));
+      for (let i=0;i<recs.length;i+=50) await PS.api.insertMinimal("schedules", recs.slice(i,i+50));
+      PS.toast(`${dates.length} jobs generated!`);
+      load();
+    } catch (e) { PS.toast("Generation failed", "error"); }
+  }
+
+  async function deleteAllSchedules() {
+    if (!confirm("Delete ALL scheduled (unfinished) jobs? Completed visits stay.")) return;
+    try {
+      await PS.api.delete("schedules", `customer_id=eq.${custId}&status=eq.Scheduled`);
+      PS.toast("Scheduled jobs cleared");
+      load();
+    } catch (e) { PS.toast("Delete failed", "error"); }
+  }
+
+  async function logVisit() {
+    const date = document.getElementById("visit-date").value;
+    const note = document.getElementById("visit-note").value.trim();
+    if (!date) return PS.toast("Pick a date", "error");
+    try {
+      await PS.api.insertMinimal("visits", { customer_id: custId, visit_date: date, notes: note || null, completed: true });
+      PS.toast("Visit logged"); load();
+    } catch (e) { PS.toast("Could not log", "error"); }
+  }
+
+  async function sendSMS() {
+    const msg = document.getElementById("sms-text").value.trim();
+    if (!msg) return;
+    try {
+      await PS.api.insertMinimal("sms_log", { customer_id: custId, to_number: customer.phone, message: msg, direction: "outbound", status: "Sent" });
+      document.getElementById("sms-text").value = "";
+      window.open(`sms:${customer.phone}?body=${encodeURIComponent(msg)}`);
+      load();
+    } catch (e) { PS.toast("Could not send", "error"); }
+  }
+
+  function smsCust() {
+    const first = (customer.name||"").split(" ")[0];
+    window.open(`sms:${customer.phone}?body=${encodeURIComponent(`Hi ${first}, this is ${customer.assigned_tech||"Josh"} from Poop Savvy! 🐾`)}`);
+  }
+  function emailCust() {
+    window.open(`mailto:${customer.email}?subject=Poop%20Savvy&body=Hi ${customer.name},%0D%0A%0D%0AJust reaching out!%0D%0A%0D%0ABest,%0D%0AJosh%0D%0A972.388.8255`);
+  }
+
+  window.onAuthReady = load;
+</script>
+</body>
+</html>

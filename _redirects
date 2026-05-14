@@ -1,0 +1,12 @@
+# Proxy Supabase through our own domain so the browser never needs to talk to supabase.co.
+# Anything hitting /auth/, /rest/, /storage/, /functions/, /realtime/ on this site
+# gets transparently forwarded to the real Supabase project.
+#
+# Result: no DNS blocks, no ad-blocker lists, no CORS headaches. Works on every network
+# like any other normal app.
+
+/auth/*       https://thjotelpvxonkvkycsga.supabase.co/auth/:splat       200!
+/rest/*       https://thjotelpvxonkvkycsga.supabase.co/rest/:splat       200!
+/storage/*    https://thjotelpvxonkvkycsga.supabase.co/storage/:splat    200!
+/functions/*  https://thjotelpvxonkvkycsga.supabase.co/functions/:splat  200!
+/realtime/*   https://thjotelpvxonkvkycsga.supabase.co/realtime/:splat   200!

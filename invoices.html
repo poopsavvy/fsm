@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Poop Savvy — Invoices</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#0ea5e9">
+<link rel="stylesheet" href="app.css">
+<style>
+  /* Summary band */
+  .inv-summary {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;
+  }
+  .sum-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px;
+    box-shadow: var(--shadow-sm);
+  }
+  .sum-card .lbl { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+  .sum-card .val { font-size: 26px; font-weight: 800; color: var(--text); letter-spacing: -0.02em; margin-top: 4px; }
+  .sum-card .sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .sum-card.green .val { color: var(--green-700); }
+  .sum-card.amber .val { color: var(--amber-700); }
+  .sum-card.red   .val { color: var(--red-700); }
+
+  /* Toolbar */
+  .inv-toolbar {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    margin-bottom: 14px;
+  }
+  .inv-toolbar input[type=month] {
+    padding: 8px 12px; border: 1px solid var(--border-strong);
+    border-radius: 8px; font-size: 14px; background: #fff; outline: none;
+  }
+  .inv-toolbar input[type=month]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(14,165,233,0.15); }
+
+  /* Invoice table */
+  .inv-row .amt { font-weight: 700; color: var(--green-700); }
+  .inv-row .due { font-size: 13px; color: var(--text-muted); }
+  .inv-row .due.overdue { color: var(--red-700); font-weight: 700; }
+  .inv-row .due input[type=date] {
+    padding: 4px 6px; border: 1px solid var(--border-strong);
+    border-radius: 6px; font-size: 12px; background: #fff;
+  }
+
+  .status-chip {
+    display: inline-block; padding: 3px 9px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .chip-paid    { background: var(--green-50);  color: var(--green-700); }
+  .chip-unpaid  { background: var(--amber-50);  color: var(--amber-700); }
+  .chip-overdue { background: var(--red-50);    color: var(--red-700); }
+
+  .act-btn {
+    font-size: 11px; padding: 5px 10px; border-radius: 6px;
+    border: 1px solid; background: #fff; font-weight: 700;
+    cursor: pointer; transition: all 0.12s; white-space: nowrap;
+  }
+  .act-btn.sms    { color: var(--accent);     border-color: var(--accent-100); }
+  .act-btn.sms:hover    { background: var(--accent-50); }
+  .act-btn.email  { color: var(--green-700);  border-color: #a7f3d0; }
+  .act-btn.email:hover  { background: #d1fae5; }
+  .act-btn.paid   { color: var(--green-700);  border-color: #a7f3d0; }
+  .act-btn.paid:hover   { background: #d1fae5; }
+  .act-btn.unpaid { color: var(--amber-700);  border-color: #fde68a; }
+  .act-btn.unpaid:hover { background: var(--amber-50); }
+  .actions { display: flex; gap: 4px; flex-wrap: wrap; }
+
+  /* Template picker overlay */
+  .tpl-overlay {
+    position: fixed; inset: 0; background: rgba(15,23,42,0.4);
+    display: none; align-items: center; justify-content: center;
+    z-index: 60; padding: 16px;
+  }
+  .tpl-overlay.open { display: flex; }
+  .tpl-modal {
+    background: #fff; border-radius: var(--radius-lg);
+    max-width: 560px; width: 100%; max-height: 90vh; overflow-y: auto;
+    padding: 20px 22px; box-shadow: var(--shadow-lg);
+  }
+  .tpl-modal h2 { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
+  .tpl-modal .sub { font-size: 13px; color: var(--text-muted); margin-top: 3px; }
+  .tpl-group-lbl {
+    font-size: 11px; color: var(--text-faint); text-transform: uppercase;
+    letter-spacing: 0.06em; font-weight: 700; margin-top: 14px; margin-bottom: 6px;
+  }
+  .tpl-card {
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 8px; background: var(--surface-2);
+    cursor: pointer; transition: all 0.12s;
+  }
+  .tpl-card:hover { border-color: var(--accent-100); background: var(--accent-50); }
+  .tpl-card .tpl-name { font-weight: 700; font-size: 13px; color: var(--text); }
+  .tpl-card .tpl-preview {
+    font-size: 12px; color: var(--text-muted); margin-top: 4px;
+    white-space: pre-wrap; line-height: 1.4;
+  }
+  .tpl-close {
+    float: right; background: transparent; border: 0;
+    font-size: 22px; color: var(--text-faint); cursor: pointer; line-height: 1;
+  }
+
+  @media (max-width: 900px) {
+    .inv-summary { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 700px) {
+    th:nth-child(4), td:nth-child(4) { display: none; }
+  }
+</style>
+</head>
+<body data-page="invoices">
+<nav class="app-nav" id="app-nav"></nav>
+
+<div class="container">
+  <div class="page-title">
+    <div>
+      <h1>Invoices</h1>
+      <div class="sub" id="sub">Track paid & pending invoices by month</div>
+    </div>
+    <div class="page-actions">
+      <button class="btn btn-ghost" onclick="exportCSV()">⬇ CSV</button>
+      <button class="btn btn-primary" onclick="generateForMonth()">+ Generate for this month</button>
+    </div>
+  </div>
+
+  <!-- SUMMARY CARDS -->
+  <div class="inv-summary">
+    <div class="sum-card green">
+      <div class="lbl">Total Paid</div>
+      <div class="val" id="s-paid">—</div>
+      <div class="sub" id="s-paid-count">0 invoices</div>
+    </div>
+    <div class="sum-card amber">
+      <div class="lbl">Total Pending</div>
+      <div class="val" id="s-pending">—</div>
+      <div class="sub" id="s-pending-count">0 invoices</div>
+    </div>
+    <div class="sum-card red">
+      <div class="lbl">Overdue</div>
+      <div class="val" id="s-overdue">—</div>
+      <div class="sub" id="s-overdue-count">0 past due date</div>
+    </div>
+    <div class="sum-card">
+      <div class="lbl">Collection Rate</div>
+      <div class="val" id="s-rate">—</div>
+      <div class="sub">this month</div>
+    </div>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div class="inv-toolbar">
+    <label style="font-size:13px;color:var(--text-muted);font-weight:600;">Month</label>
+    <input type="month" id="month-pick" onchange="onMonthChange()">
+    <button class="btn btn-sm" onclick="shiftMonth(-1)">◀ Prev</button>
+    <button class="btn btn-sm" onclick="shiftMonth(1)">Next ▶</button>
+    <div class="pill-row" id="status-pills" style="margin-left:auto;">
+      <span class="pill active" data-filter="all">All</span>
+      <span class="pill" data-filter="unpaid">Unpaid</span>
+      <span class="pill" data-filter="overdue">Overdue</span>
+      <span class="pill" data-filter="paid">Paid</span>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="card">
+    <div class="table-wrap" id="table-wrap"><div class="loading">Loading invoices…</div></div>
+  </div>
+</div>
+
+<!-- Template picker modal -->
+<div class="tpl-overlay" id="tpl-overlay">
+  <div class="tpl-modal">
+    <button class="tpl-close" onclick="closeTpl()" aria-label="Close">×</button>
+    <h2 id="tpl-title">Pick a template</h2>
+    <div class="sub" id="tpl-sub">—</div>
+    <div id="tpl-body"></div>
+  </div>
+</div>
+
+<nav class="tab-bar" id="tab-bar"></nav>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="app.js"></script>
+<script>
+  /* ====================================================================
+     State — persisted in Supabase `payments` table
+     (billing_period = YYYY-MM, unique per (customer_id, billing_period))
+     ==================================================================== */
+  let allCustomers  = [];
+  let monthPayments = [];     // rows from payments for currentMonth
+  let currentMonth  = "";     // "YYYY-MM"
+  let statusFilter  = "all";
+
+  // Look up the persisted payment record for a customer in the current month
+  function findPayment(customerId) {
+    return monthPayments.find(p => p.customer_id === customerId) || null;
+  }
+
+  // Upsert helper: merge-duplicates on (customer_id, billing_period)
+  async function upsertPayment(row) {
+    const url = `/payments?on_conflict=customer_id,billing_period`;
+    const res = await fetch(PS.SUPA_URL + "/rest/v1" + url, {
+      method: "POST",
+      headers: {
+        apikey: PS.SUPA_ANON,
+        Authorization: "Bearer " + (PS.auth.getSession()?.access_token || PS.SUPA_ANON),
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=representation",
+      },
+      body: JSON.stringify([row]),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Upsert failed: ${res.status} ${text.slice(0,200)}`);
+    }
+    const out = await res.json();
+    return Array.isArray(out) ? out[0] : out;
+  }
+
+  /* ====================================================================
+     Month helpers
+     ==================================================================== */
+  function currentYM() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+  }
+  function firstOfMonth(ym) { return `${ym}-01`; }
+  function prettyMonth(ym) {
+    const [y,m] = ym.split("-").map(Number);
+    return new Date(y, m-1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  }
+  async function shiftMonth(delta) {
+    const [y,m] = currentMonth.split("-").map(Number);
+    const d = new Date(y, m-1+delta, 1);
+    currentMonth = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+    document.getElementById("month-pick").value = currentMonth;
+    await refreshPayments();
+    renderAll();
+  }
+  async function onMonthChange() {
+    currentMonth = document.getElementById("month-pick").value || currentYM();
+    await refreshPayments();
+    renderAll();
+  }
+
+  /* ====================================================================
+     Load — customers + this month's payment rows (live from Supabase)
+     ==================================================================== */
+  async function loadAll() {
+    try {
+      const [custs, pays] = await Promise.all([
+        PS.api.select(
+          "customers",
+          "select=id,name,phone,email,address,city,zip,monthly_rate,service_frequency,service_status,assigned_tech,billing_platform&order=name.asc"
+        ),
+        PS.api.select(
+          "payments",
+          `select=*&billing_period=eq.${currentMonth}`
+        ),
+      ]);
+      allCustomers  = custs || [];
+      monthPayments = pays || [];
+      renderAll();
+    } catch (e) {
+      document.getElementById("table-wrap").innerHTML = `
+        <div class="empty" style="padding:2rem;">
+          <div class="empty-title">Could not load invoices</div>
+          <div class="text-sm">${PS.fmt.escape(e.message||String(e))}</div>
+          <button class="btn btn-secondary mt-2" onclick="loadAll()">Retry</button>
+        </div>`;
+    }
+  }
+
+  async function refreshPayments() {
+    monthPayments = await PS.api.select("payments", `select=*&billing_period=eq.${currentMonth}`) || [];
+  }
+
+  /* ====================================================================
+     Render
+     ==================================================================== */
+  document.getElementById("status-pills").addEventListener("click", e => {
+    const p = e.target.closest(".pill"); if (!p) return;
+    document.querySelectorAll("#status-pills .pill").forEach(x => x.classList.remove("active"));
+    p.classList.add("active"); statusFilter = p.dataset.filter; renderAll();
+  });
+
+  // Build an invoice row (customer + persisted payment row, if any).
+  function buildInvoice(cust, ym) {
+    const p = findPayment(cust.id);
+    const amount = p && p.amount != null
+      ? Number(p.amount)
+      : Number(cust.monthly_rate || 0);
+    const due_date = (p && p.due_date) || firstOfMonth(ym);
+    const paid = !!(p && p.status === "paid");
+    const today = PS.fmt.today();
+    const isOverdue = !paid && due_date < today;
+    return {
+      payment_id: p?.id || null,
+      customer_id: cust.id,
+      customer: cust,
+      amount,
+      due_date,
+      paid,
+      paid_date: p?.paid_date || null,
+      notes: p?.notes || "",
+      status: paid ? "paid" : (isOverdue ? "overdue" : "unpaid"),
+      ym,
+    };
+  }
+
+  function renderAll() {
+    const ym = currentMonth;
+    document.getElementById("sub").textContent = `${prettyMonth(ym)} · ${allCustomers.length} customers on file`;
+
+    // Only bill active customers by default
+    const billable = allCustomers.filter(c => c.service_status !== "cancelled");
+    const invoices = billable.map(c => buildInvoice(c, ym));
+
+    // Summary
+    const paidInv = invoices.filter(i => i.paid);
+    const unpaidInv = invoices.filter(i => !i.paid);
+    const overdueInv = invoices.filter(i => i.status === "overdue");
+    const paidSum = paidInv.reduce((s,i)=> s + i.amount, 0);
+    const pendingSum = unpaidInv.reduce((s,i)=> s + i.amount, 0);
+    const overdueSum = overdueInv.reduce((s,i)=> s + i.amount, 0);
+    const total = paidSum + pendingSum;
+    const rate = total ? Math.round((paidSum / total) * 100) : 0;
+
+    document.getElementById("s-paid").textContent = PS.fmt.money(paidSum, false);
+    document.getElementById("s-paid-count").textContent = `${paidInv.length} invoice${paidInv.length===1?"":"s"}`;
+    document.getElementById("s-pending").textContent = PS.fmt.money(pendingSum, false);
+    document.getElementById("s-pending-count").textContent = `${unpaidInv.length} invoice${unpaidInv.length===1?"":"s"}`;
+    document.getElementById("s-overdue").textContent = PS.fmt.money(overdueSum, false);
+    document.getElementById("s-overdue-count").textContent = `${overdueInv.length} past due date`;
+    document.getElementById("s-rate").textContent = rate + "%";
+
+    // Filter + sort
+    let rows = invoices;
+    if (statusFilter === "unpaid") rows = rows.filter(i => !i.paid);
+    else if (statusFilter === "paid") rows = rows.filter(i => i.paid);
+    else if (statusFilter === "overdue") rows = rows.filter(i => i.status === "overdue");
+    rows.sort((a,b) => {
+      // overdue first, then unpaid, then paid; within each by customer name
+      const rank = s => s === "overdue" ? 0 : (s === "unpaid" ? 1 : 2);
+      const r = rank(a.status) - rank(b.status);
+      if (r !== 0) return r;
+      return (a.customer.name||"").localeCompare(b.customer.name||"");
+    });
+
+    const wrap = document.getElementById("table-wrap");
+    if (!rows.length) {
+      wrap.innerHTML = `<div class="empty" style="padding:3rem;">
+        <div class="empty-title">No invoices match this filter.</div>
+        <div class="text-sm">Try a different month or status.</div>
+      </div>`;
+      return;
+    }
+
+    const body = rows.map(inv => {
+      const c = inv.customer;
+      const loc = [c.city, c.zip].filter(Boolean).join(", ");
+      const chip = inv.status === "paid"
+        ? `<span class="status-chip chip-paid">Paid</span>`
+        : (inv.status === "overdue"
+          ? `<span class="status-chip chip-overdue">Overdue</span>`
+          : `<span class="status-chip chip-unpaid">Unpaid</span>`);
+      const dueCls = inv.status === "overdue" ? "due overdue" : "due";
+      const daysOff = daysDiff(inv.due_date, PS.fmt.today());
+      let dueNote = "";
+      if (inv.paid) {
+        dueNote = inv.paid_date ? `paid ${PS.fmt.date(inv.paid_date)}` : "paid";
+      } else if (daysOff > 0) {
+        dueNote = `${daysOff} day${daysOff===1?"":"s"} overdue`;
+      } else if (daysOff === 0) {
+        dueNote = "due today";
+      } else {
+        dueNote = `due in ${-daysOff} day${daysOff===-1?"":"s"}`;
+      }
+      const payBtn = inv.paid
+        ? `<button class="act-btn unpaid" onclick="togglePaid('${inv.customer_id}', false)">Mark Unpaid</button>`
+        : `<button class="act-btn paid"   onclick="togglePaid('${inv.customer_id}', true)">Mark Paid</button>`;
+      return `<tr class="inv-row">
+        <td>
+          <a class="link" href="customer-detail.html?id=${c.id}">${PS.fmt.escape(c.name||"—")}</a>
+          <div class="sub-line">${PS.fmt.escape(loc)}</div>
+        </td>
+        <td class="amt">${PS.fmt.money(inv.amount)}</td>
+        <td class="${dueCls}">
+          <input type="date" value="${inv.due_date}" onchange="updateDue('${inv.customer_id}', this.value)">
+          <div style="margin-top:3px;">${dueNote}</div>
+        </td>
+        <td>${PS.fmt.escape(c.service_frequency||"—")}<div class="sub-line">${PS.fmt.escape(c.billing_platform||"—")}</div></td>
+        <td>${chip}</td>
+        <td>
+          <div class="actions">
+            ${payBtn}
+            ${c.phone ? `<button class="act-btn sms"   onclick="openTpl('sms',   '${inv.customer_id}')">SMS</button>`   : ""}
+            ${c.email ? `<button class="act-btn email" onclick="openTpl('email', '${inv.customer_id}')">Email</button>` : ""}
+          </div>
+        </td>
+      </tr>`;
+    }).join("");
+
+    wrap.innerHTML = `
+      <table class="t">
+        <thead><tr>
+          <th>Customer</th>
+          <th>Amount</th>
+          <th>Due date</th>
+          <th>Freq / Billing</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr></thead>
+        <tbody>${body}</tbody>
+      </table>`;
+  }
+
+  function daysDiff(a, b) {
+    // positive => a < b (a is b days before); useful for "days overdue" when a=due, b=today
+    const da = new Date(a + "T00:00:00");
+    const db = new Date(b + "T00:00:00");
+    return Math.round((db - da) / 86400000);
+  }
+
+  /* ====================================================================
+     Actions
+     ==================================================================== */
+  async function togglePaid(customerId, makePaid) {
+    const cust = allCustomers.find(c => c.id === customerId);
+    if (!cust) return;
+    const inv = buildInvoice(cust, currentMonth);
+    try {
+      await upsertPayment({
+        customer_id: customerId,
+        billing_period: currentMonth,
+        amount: inv.amount,
+        due_date: inv.due_date,
+        status: makePaid ? "paid" : "pending",
+        paid_date: makePaid ? PS.fmt.today() : null,
+      });
+      await refreshPayments();
+      PS.toast(makePaid ? "Marked paid" : "Marked unpaid", makePaid ? "success" : "info");
+      renderAll();
+    } catch (e) {
+      PS.toast("Could not save: " + e.message, "error");
+    }
+  }
+
+  async function updateDue(customerId, newDate) {
+    if (!newDate) return;
+    const cust = allCustomers.find(c => c.id === customerId);
+    if (!cust) return;
+    const inv = buildInvoice(cust, currentMonth);
+    try {
+      await upsertPayment({
+        customer_id: customerId,
+        billing_period: currentMonth,
+        amount: inv.amount,
+        due_date: newDate,
+        status: inv.paid ? "paid" : "pending",
+        paid_date: inv.paid_date,
+      });
+      await refreshPayments();
+      PS.toast("Due date updated", "info");
+      renderAll();
+    } catch (e) {
+      PS.toast("Could not save: " + e.message, "error");
+    }
+  }
+
+  async function generateForMonth() {
+    // Seed a payment row for every billable customer who doesn't have one this month.
+    const rows = [];
+    allCustomers.forEach(c => {
+      if (c.service_status === "cancelled") return;
+      if (findPayment(c.id)) return;
+      rows.push({
+        customer_id: c.id,
+        billing_period: currentMonth,
+        amount: Number(c.monthly_rate || 0),
+        due_date: firstOfMonth(currentMonth),
+        status: "pending",
+      });
+    });
+    if (!rows.length) {
+      PS.toast("All invoices already generated for this month", "info");
+      return;
+    }
+    try {
+      // Chunked upsert so we don't hit URL/body limits
+      for (let i = 0; i < rows.length; i += 50) {
+        const chunk = rows.slice(i, i+50);
+        const res = await fetch(PS.SUPA_URL + "/rest/v1/payments?on_conflict=customer_id,billing_period", {
+          method: "POST",
+          headers: {
+            apikey: PS.SUPA_ANON,
+            Authorization: "Bearer " + (PS.auth.getSession()?.access_token || PS.SUPA_ANON),
+            "Content-Type": "application/json",
+            Prefer: "resolution=merge-duplicates,return=minimal",
+          },
+          body: JSON.stringify(chunk),
+        });
+        if (!res.ok) throw new Error(await res.text());
+      }
+      await refreshPayments();
+      PS.toast(`Generated ${rows.length} invoice${rows.length===1?"":"s"} for ${prettyMonth(currentMonth)}`);
+      renderAll();
+    } catch (e) {
+      PS.toast("Could not generate: " + e.message, "error");
+    }
+  }
+
+  function exportCSV() {
+    const ym = currentMonth;
+    const billable = allCustomers.filter(c => c.service_status !== "cancelled");
+    const invs = billable.map(c => buildInvoice(c, ym));
+    const headers = ["customer","phone","email","address","amount","due_date","status","paid_date","frequency","billing"];
+    const rows = invs.map(i => [
+      i.customer.name, i.customer.phone, i.customer.email, i.customer.address,
+      i.amount, i.due_date, i.status, i.paid_date || "",
+      i.customer.service_frequency || "", i.customer.billing_platform || "",
+    ].map(v => JSON.stringify(v ?? "")).join(","));
+    const csv = headers.join(",") + "\n" + rows.join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `poopsavvy-invoices-${ym}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  /* ====================================================================
+     Templates (3 contacts for OVERDUE + 3 contacts for DUE)
+     Each template gets tokens substituted: {first}, {amount}, {due},
+     {month}, {days_overdue}, {tech}, {paylink}
+     ==================================================================== */
+
+  // You can edit these freely — they drive both SMS and Email buttons.
+  const PAY_LINK = "https://www.paypal.com/paypalme/poopsavvy"; // adjust if you want
+
+  const TEMPLATES = {
+    sms: {
+      due: [
+        {
+          name: "1. Friendly reminder (5 days before due)",
+          body: "Hi {first}! 🐾 Just a heads-up from Poop Savvy — your {month} invoice of {amount} is due {due}. You can pay anytime: {paylink}. Thanks for being a great customer! — {tech}"
+        },
+        {
+          name: "2. Day-of reminder (due today)",
+          body: "Hey {first}, it's {tech} with Poop Savvy. Your {month} invoice for {amount} is due today. Quick pay link: {paylink}. Thank you! 🐾"
+        },
+        {
+          name: "3. Final nudge (day of, evening)",
+          body: "Hi {first}! Just making sure this didn't get buried — your {amount} invoice for {month} is due today. Pay here when you get a sec: {paylink}. Appreciate you! — {tech}, Poop Savvy"
+        },
+      ],
+      overdue: [
+        {
+          name: "1. Gentle reminder (1–3 days overdue)",
+          body: "Hi {first}, {tech} with Poop Savvy here. Your {month} invoice of {amount} was due {due} and shows unpaid on my end ({days_overdue} day(s) late). Could you knock that out today? {paylink} — thanks!"
+        },
+        {
+          name: "2. Second notice (4–10 days overdue)",
+          body: "Hey {first} — second notice from Poop Savvy. {amount} for {month} is now {days_overdue} days past due. Please pay today so we can keep service running: {paylink}. Shoot me a text if there's a hiccup. — {tech}"
+        },
+        {
+          name: "3. Final notice / service pause warning",
+          body: "{first}, this is {tech} with Poop Savvy. Your {month} balance of {amount} is {days_overdue} days overdue. Service will be paused at the next scheduled visit unless paid today: {paylink}. Please call 972-388-8255 if you need to work something out."
+        },
+      ],
+    },
+    email: {
+      due: [
+        {
+          name: "1. Friendly reminder (5 days before due)",
+          subject: "Your Poop Savvy invoice for {month}",
+          body:
+`Hi {first},
+
+Hope you and the pups are doing great! Just a friendly reminder that your {month} Poop Savvy invoice of {amount} is due on {due}.
+
+You can pay quickly here: {paylink}
+
+As always — thanks for trusting us with your yard. Let me know if anything comes up.
+
+Best,
+{tech}
+Poop Savvy
+972-388-8255`
+        },
+        {
+          name: "2. Due today",
+          subject: "Poop Savvy invoice due today ({amount})",
+          body:
+`Hi {first},
+
+Quick note — your Poop Savvy invoice for {month} is due today.
+
+Amount: {amount}
+Pay link: {paylink}
+
+Thanks so much for being part of the pack 🐾
+
+— {tech}
+Poop Savvy`
+        },
+        {
+          name: "3. Receipt / Thank you (use after they pay)",
+          subject: "Thanks, {first}! Payment received",
+          body:
+`Hi {first},
+
+Payment of {amount} for your {month} service — received. You're all set, and the yard will stay spotless on our next visit.
+
+If you ever need to pause, skip, or add a dog, just shoot me a message.
+
+Thanks again,
+{tech}
+Poop Savvy
+972-388-8255`
+        },
+      ],
+      overdue: [
+        {
+          name: "1. Gentle past-due reminder",
+          subject: "Quick reminder: {month} invoice ({amount})",
+          body:
+`Hi {first},
+
+I noticed your Poop Savvy invoice for {month} is showing unpaid on my end. It was due {due}, so it's about {days_overdue} day(s) past due.
+
+No worries if it slipped by — it happens! You can clear it here in a couple clicks: {paylink}
+
+If you've already paid in the last day or two, please ignore this.
+
+Thanks,
+{tech}
+Poop Savvy`
+        },
+        {
+          name: "2. Second notice (4–10 days)",
+          subject: "Second notice — {month} balance of {amount}",
+          body:
+`Hi {first},
+
+This is a second notice that your {month} invoice of {amount} is now {days_overdue} days past due.
+
+Please take care of this today so we can keep service running without interruption: {paylink}
+
+If there's an issue with the card on file or timing, just let me know — I'd rather work something out than pause your service.
+
+Thanks,
+{tech}
+Poop Savvy
+972-388-8255`
+        },
+        {
+          name: "3. Final notice — service pause",
+          subject: "Final notice — service will pause",
+          body:
+`Hi {first},
+
+This is a final notice on your Poop Savvy account. Your {month} balance of {amount} is now {days_overdue} days past due.
+
+Unless payment is received today, your next scheduled visit will be paused and your account placed on hold.
+
+Pay here to keep everything running: {paylink}
+
+Please call me directly at 972-388-8255 if you need to discuss — I'm happy to work out a plan, but I need to hear from you.
+
+— {tech}
+Poop Savvy`
+        },
+      ],
+    },
+  };
+
+  function tokensFor(customerId) {
+    const c = allCustomers.find(x => x.id === customerId);
+    if (!c) return {};
+    const inv = buildInvoice(c, currentMonth);
+    const first = (c.name || "").split(" ")[0] || "there";
+    const dueStr = PS.fmt.date(inv.due_date);
+    const daysOver = daysDiff(inv.due_date, PS.fmt.today());
+    return {
+      first,
+      amount: PS.fmt.money(inv.amount),
+      due: dueStr,
+      month: prettyMonth(currentMonth),
+      days_overdue: Math.max(0, daysOver),
+      tech: c.assigned_tech || "Josh",
+      paylink: PAY_LINK,
+      _customer: c,
+      _inv: inv,
+    };
+  }
+
+  function fill(str, tok) {
+    return String(str).replace(/\{(\w+)\}/g, (_, k) => (tok[k] != null ? tok[k] : ""));
+  }
+
+  let _tplContext = null;
+  function openTpl(kind, customerId) {
+    const tok = tokensFor(customerId);
+    if (!tok._customer) return;
+    _tplContext = { kind, customerId, tok };
+    const isOverdue = tok._inv.status === "overdue";
+    const bucketLabel = isOverdue ? "Overdue" : "Due";
+    document.getElementById("tpl-title").textContent =
+      `${kind === "sms" ? "SMS" : "Email"} — ${tok._customer.name}`;
+    document.getElementById("tpl-sub").textContent =
+      `${bucketLabel} invoice · ${tok.amount} · due ${tok.due}`;
+
+    const body = document.getElementById("tpl-body");
+    const order = isOverdue ? ["overdue","due"] : ["due","overdue"];
+    body.innerHTML = order.map(bucket => {
+      const list = TEMPLATES[kind][bucket];
+      const head = (bucket === "overdue" ? "Overdue — 3 contact attempts" : "Due — 3 contact attempts")
+                 + (bucket === (isOverdue ? "overdue" : "due") ? " (recommended)" : "");
+      return `<div class="tpl-group-lbl">${head}</div>` +
+        list.map((tpl, idx) => {
+          const preview = kind === "sms" ? fill(tpl.body, tok) : `Subject: ${fill(tpl.subject, tok)}\n\n${fill(tpl.body, tok)}`;
+          return `<div class="tpl-card" onclick="sendTpl('${bucket}', ${idx})">
+            <div class="tpl-name">${PS.fmt.escape(tpl.name)}</div>
+            <div class="tpl-preview">${PS.fmt.escape(preview)}</div>
+          </div>`;
+        }).join("");
+    }).join("");
+
+    document.getElementById("tpl-overlay").classList.add("open");
+  }
+  function closeTpl() {
+    document.getElementById("tpl-overlay").classList.remove("open");
+    _tplContext = null;
+  }
+  document.getElementById("tpl-overlay").addEventListener("click", e => {
+    if (e.target === e.currentTarget) closeTpl();
+  });
+
+  function sendTpl(bucket, idx) {
+    if (!_tplContext) return;
+    const { kind, tok } = _tplContext;
+    const tpl = TEMPLATES[kind][bucket][idx];
+    const c = tok._customer;
+    if (kind === "sms") {
+      const body = fill(tpl.body, tok);
+      if (!c.phone) return PS.toast("No phone on file", "error");
+      window.open(`sms:${c.phone}?body=${encodeURIComponent(body)}`);
+    } else {
+      const subject = fill(tpl.subject, tok);
+      const body = fill(tpl.body, tok);
+      if (!c.email) return PS.toast("No email on file", "error");
+      window.open(`mailto:${c.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+    }
+    closeTpl();
+  }
+
+  /* ====================================================================
+     Boot
+     ==================================================================== */
+  window.onAuthReady = async function () {
+    currentMonth = currentYM();
+    document.getElementById("month-pick").value = currentMonth;
+    await loadAll();
+  };
+</script>
+</body>
+</html>

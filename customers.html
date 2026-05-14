@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Poop Savvy — Customers</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#0ea5e9">
+<link rel="stylesheet" href="app.css">
+<style>
+  .act-btn {
+    font-size: 11px; padding: 5px 10px; border-radius: 6px;
+    border: 1px solid; background: #fff; font-weight: 700;
+    cursor: pointer; transition: all 0.12s; white-space: nowrap;
+  }
+  .act-btn.sms { color: var(--accent); border-color: var(--accent-100); }
+  .act-btn.sms:hover { background: var(--accent-50); }
+  .act-btn.email { color: var(--green-700); border-color: #a7f3d0; }
+  .act-btn.email:hover { background: #d1fae5; }
+  .act-btn.call { color: var(--purple-700); border-color: #ddd6fe; }
+  .act-btn.call:hover { background: var(--purple-50); }
+  .actions { display: flex; gap: 4px; flex-wrap: wrap; }
+  @media (max-width: 700px) {
+    th:nth-child(5), td:nth-child(5),
+    th:nth-child(6), td:nth-child(6) { display: none; }
+  }
+</style>
+</head>
+<body data-page="customers">
+<nav class="app-nav" id="app-nav"></nav>
+
+<div class="container">
+  <div class="page-title">
+    <div>
+      <h1>Customers</h1>
+      <div class="sub" id="sub">Active accounts, scheduled jobs, and lifetime relationships</div>
+    </div>
+    <div class="page-actions">
+      <button class="btn btn-ghost" onclick="exportCSV()">⬇ CSV</button>
+      <button class="btn btn-primary" onclick="openAddModal()">+ Add Customer</button>
+    </div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi accent"><div class="kpi-label">Total</div><div class="kpi-val" id="s-total">—</div></div>
+    <div class="kpi green"><div class="kpi-label">Active</div><div class="kpi-val" id="s-active">—</div></div>
+    <div class="kpi amber"><div class="kpi-label">Paused</div><div class="kpi-val" id="s-paused">—</div></div>
+    <div class="kpi green"><div class="kpi-label">Monthly Revenue</div><div class="kpi-val" id="s-revenue">—</div></div>
+  </div>
+
+  <div class="toolbar">
+    <div class="search-wrap">
+      <input type="text" id="search" placeholder="Search name, phone, address, zip…" oninput="onSearch(this.value)">
+      <button class="clear-btn" onclick="clearSearch()" aria-label="Clear">×</button>
+    </div>
+    <div class="pill-row" id="status-pills">
+      <span class="pill active" data-filter="all">All</span>
+      <span class="pill" data-filter="active">Active</span>
+      <span class="pill" data-filter="paused">Paused</span>
+      <span class="pill" data-filter="cancelled">Cancelled</span>
+    </div>
+    <div class="pill-row" id="freq-pills">
+      <span class="pill active" data-freq="all">Any freq.</span>
+      <span class="pill" data-freq="Weekly">Weekly</span>
+      <span class="pill" data-freq="Every Other Week">Bi-weekly</span>
+      <span class="pill" data-freq="Monthly">Monthly</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap" id="table-wrap"><div class="loading">Loading customers…</div></div>
+  </div>
+</div>
+
+<!-- Add modal -->
+<div class="overlay" id="modal-overlay">
+  <div class="modal">
+    <h2>Add Customer</h2>
+    <div class="form-grid">
+      <div class="form-group form-full"><label>Full name *</label><input id="f-name" type="text"></div>
+      <div class="form-group"><label>Phone</label><input id="f-phone" type="tel" placeholder="972-555-0000"></div>
+      <div class="form-group"><label>Email</label><input id="f-email" type="email"></div>
+      <div class="form-group form-full"><label>Address</label><input id="f-address" type="text"></div>
+      <div class="form-group"><label>City</label><input id="f-city" type="text" value="DeSoto"></div>
+      <div class="form-group"><label>Zip</label><input id="f-zip" type="text"></div>
+      <div class="form-group"><label>Gate code</label><input id="f-gate" type="text" placeholder="Optional"></div>
+      <div class="form-group"><label># Dogs</label>
+        <select id="f-dogs" onchange="calcRate()">${[1,2,3,4,5].map(n=>`<option value="${n}">${n}</option>`).join("")}</select>
+      </div>
+      <div class="form-group"><label>Frequency</label>
+        <select id="f-freq" onchange="calcRate()">
+          <option>Weekly</option><option>Every Other Week</option><option>Monthly</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Monthly rate</label>
+        <div class="rate-display" id="f-rate-display">$72.00/mo</div>
+        <input type="hidden" id="f-rate" value="72">
+      </div>
+      <div class="form-group"><label>Start date</label><input id="f-start" type="date"></div>
+      <div class="form-group"><label>Status</label>
+        <select id="f-status">
+          <option value="active">Active</option><option value="paused">Paused</option><option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Billing</label>
+        <select id="f-billing"><option value="paypal">PayPal</option><option value="quickbooks">QuickBooks</option></select>
+      </div>
+      <div class="form-group"><label>Tech</label>
+        <select id="f-tech"><option>Josh</option><option>Dee</option><option>Drake</option></select>
+      </div>
+      <div class="form-group form-full"><label>Yard / access notes</label>
+        <textarea id="f-yard" rows="2" placeholder="Gate info, dog names, yard access…"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="save-btn" onclick="saveCustomer()">Save &amp; Generate Schedule</button>
+    </div>
+  </div>
+</div>
+
+<nav class="tab-bar" id="tab-bar"></nav>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="app.js"></script>
+<script>
+  let allCustomers = [];
+  let statusFilter = "all";
+  let freqFilter = "all";
+  let sortCol = "name", sortDir = "asc";
+  let searchQ = "", searchDebounce;
+
+  function onSearch(v) {
+    clearTimeout(searchDebounce);
+    document.querySelector(".search-wrap").classList.toggle("has-value", !!v);
+    searchDebounce = setTimeout(() => { searchQ = v.trim().toLowerCase(); renderTable(); }, 150);
+  }
+  function clearSearch() { document.getElementById("search").value=""; onSearch(""); document.getElementById("search").focus(); }
+
+  document.getElementById("status-pills").addEventListener("click", e => {
+    const p = e.target.closest(".pill"); if (!p) return;
+    document.querySelectorAll("#status-pills .pill").forEach(x => x.classList.remove("active"));
+    p.classList.add("active"); statusFilter = p.dataset.filter; renderTable();
+  });
+  document.getElementById("freq-pills").addEventListener("click", e => {
+    const p = e.target.closest(".pill"); if (!p) return;
+    document.querySelectorAll("#freq-pills .pill").forEach(x => x.classList.remove("active"));
+    p.classList.add("active"); freqFilter = p.dataset.freq; renderTable();
+  });
+
+  async function loadCustomers() {
+    try {
+      allCustomers = await PS.api.select("customers", "order=name.asc") || [];
+      updateStats(); renderTable();
+    } catch (e) {
+      document.getElementById("table-wrap").innerHTML = `
+        <div class="empty" style="padding:2rem;">
+          <div class="empty-title">Could not load customers</div>
+          <div class="text-sm">${PS.fmt.escape(e.message||String(e))}</div>
+          <button class="btn btn-secondary mt-2" onclick="loadCustomers()">Retry</button>
+        </div>`;
+    }
+  }
+
+  function updateStats() {
+    const active = allCustomers.filter(c => c.service_status === "active");
+    const revenue = active.reduce((s, c) => s + (parseFloat(c.monthly_rate) || 0), 0);
+    document.getElementById("s-total").textContent = allCustomers.length;
+    document.getElementById("s-active").textContent = active.length;
+    document.getElementById("s-paused").textContent = allCustomers.filter(c => c.service_status === "paused").length;
+    document.getElementById("s-revenue").textContent = PS.fmt.money(revenue, false);
+    document.getElementById("sub").textContent = `${allCustomers.length} customers · ${active.length} active · ${PS.fmt.money(revenue, false)}/mo`;
+  }
+
+  function sortCustomers(col) {
+    if (sortCol === col) sortDir = sortDir === "asc" ? "desc" : "asc";
+    else { sortCol = col; sortDir = "asc"; }
+    renderTable();
+  }
+  function sa(col) {
+    if (sortCol !== col) return '<span style="color:#cbd5e1;margin-left:3px;">⇅</span>';
+    return sortDir === "asc" ? '<span style="margin-left:3px;">↑</span>' : '<span style="margin-left:3px;">↓</span>';
+  }
+
+  function renderTable() {
+    const custs = allCustomers.filter(c => {
+      if (statusFilter !== "all" && c.service_status !== statusFilter) return false;
+      if (freqFilter !== "all" && c.service_frequency !== freqFilter) return false;
+      if (searchQ) {
+        const blob = [c.name, c.phone, c.email, c.address, c.city, c.zip, c.gate_code, c.yard_notes, c.assigned_tech].filter(Boolean).join(" ").toLowerCase();
+        if (!blob.includes(searchQ)) return false;
+      }
+      return true;
+    }).sort((a, b) => {
+      let av, bv;
+      if (sortCol === "name") { av = (a.name||"").toLowerCase(); bv = (b.name||"").toLowerCase(); }
+      else if (sortCol === "dogs") { av = a.dogs_count||0; bv = b.dogs_count||0; }
+      else if (sortCol === "rate") { av = parseFloat(a.monthly_rate)||0; bv = parseFloat(b.monthly_rate)||0; }
+      else { av = a[sortCol]||""; bv = b[sortCol]||""; }
+      if (av < bv) return sortDir === "asc" ? -1 : 1;
+      if (av > bv) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    if (!custs.length) {
+      document.getElementById("table-wrap").innerHTML = `<div class="empty" style="padding:3rem;"><div class="empty-title">No customers match.</div></div>`;
+      return;
+    }
+
+    const rows = custs.map(c => {
+      const loc = [c.city, c.zip].filter(Boolean).join(", ");
+      const st = c.service_status || "active";
+      const stCap = st.charAt(0).toUpperCase() + st.slice(1);
+      const rate = c.monthly_rate ? `$${parseFloat(c.monthly_rate).toFixed(2)}/mo` : "—";
+      return `<tr>
+        <td>
+          <a class="link" href="customer-detail.html?id=${c.id}">${PS.fmt.escape(c.name||"—")}</a>
+          <div class="sub-line">${PS.fmt.escape(loc)}</div>
+        </td>
+        <td>${PS.fmt.escape(PS.fmt.phone(c.phone)||"—")}</td>
+        <td>${(c.dogs_count||1)} · ${PS.fmt.escape(c.service_frequency||"—")}</td>
+        <td style="font-weight:700;color:var(--green-700);">${rate}</td>
+        <td><span class="badge badge-${st}">${stCap}</span></td>
+        <td>${PS.fmt.escape(c.assigned_tech||"—")}</td>
+        <td>
+          <div class="actions">
+            ${c.phone?`<button class="act-btn call" onclick="window.location.href='tel:${c.phone}'" title="Call">☎</button>`:""}
+            ${c.phone?`<button class="act-btn sms" onclick="smsCust('${c.phone}','${PS.fmt.jsAttr(c.name||"")}','${PS.fmt.jsAttr(c.assigned_tech||"Josh")}')">SMS</button>`:""}
+            ${c.email?`<button class="act-btn email" onclick="emailCust('${c.email}','${PS.fmt.jsAttr(c.name||"")}')">Email</button>`:""}
+          </div>
+        </td>
+      </tr>`;
+    }).join("");
+
+    document.getElementById("table-wrap").innerHTML = `
+      <table class="t">
+        <thead><tr>
+          <th class="sortable" onclick="sortCustomers('name')">Name ${sa("name")}</th>
+          <th>Phone</th>
+          <th class="sortable" onclick="sortCustomers('dogs')">Dogs · Freq ${sa("dogs")}</th>
+          <th class="sortable" onclick="sortCustomers('rate')">Rate ${sa("rate")}</th>
+          <th class="sortable" onclick="sortCustomers('service_status')">Status ${sa("service_status")}</th>
+          <th class="sortable" onclick="sortCustomers('assigned_tech')">Tech ${sa("assigned_tech")}</th>
+          <th>Actions</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  function smsCust(phone, name, tech) {
+    const first = name.split(" ")[0];
+    window.open(`sms:${phone}?body=${encodeURIComponent(`Hi ${first}, this is ${tech||"Josh"} from Poop Savvy! 🐾`)}`);
+  }
+  function emailCust(email, name) {
+    window.open(`mailto:${email}?subject=Poop%20Savvy&body=Hi ${name},%0D%0A%0D%0AJust reaching out!%0D%0A%0D%0ABest,%0D%0AJosh%0D%0A972.388.8255`);
+  }
+
+  function calcRate() {
+    const d = document.getElementById("f-dogs").value;
+    const f = document.getElementById("f-freq").value;
+    const p = PS.pricing.calcPrice(d, f);
+    document.getElementById("f-rate-display").textContent = `$${p.toFixed(2)}/mo`;
+    document.getElementById("f-rate").value = p;
+  }
+
+  function openAddModal() {
+    ["name","phone","email","address","zip","gate","yard"].forEach(k => { const el = document.getElementById("f-"+k); if (el) el.value=""; });
+    document.getElementById("f-city").value = "DeSoto";
+    document.getElementById("f-dogs").value = "1";
+    document.getElementById("f-freq").value = "Weekly";
+    document.getElementById("f-start").value = PS.fmt.today();
+    document.getElementById("f-status").value = "active";
+    document.getElementById("f-billing").value = "paypal";
+    document.getElementById("f-tech").value = "Josh";
+    calcRate();
+    document.getElementById("modal-overlay").classList.add("open");
+    setTimeout(() => document.getElementById("f-name").focus(), 60);
+  }
+  function closeModal() { document.getElementById("modal-overlay").classList.remove("open"); }
+  document.getElementById("modal-overlay").addEventListener("click", e => { if (e.target === e.currentTarget) closeModal(); });
+
+  async function generateSchedule(customerId, startDate, freq) {
+    const dates = PS.pricing.generateScheduleDates(startDate, freq);
+    const records = dates.map(d => ({ customer_id: customerId, scheduled_date: d, service_type: "Poop Scoop", status: "Scheduled" }));
+    for (let i = 0; i < records.length; i += 50) {
+      await PS.api.insertMinimal("schedules", records.slice(i, i + 50));
+    }
+    return records.length;
+  }
+
+  async function saveCustomer() {
+    const freq = document.getElementById("f-freq").value;
+    const dogs = parseInt(document.getElementById("f-dogs").value) || 1;
+    const startDate = document.getElementById("f-start").value;
+    const rate = PS.pricing.calcPrice(dogs, freq);
+    const payload = {
+      name:       document.getElementById("f-name").value.trim(),
+      phone:      document.getElementById("f-phone").value.trim(),
+      email:      document.getElementById("f-email").value.trim(),
+      address:    document.getElementById("f-address").value.trim(),
+      city:       document.getElementById("f-city").value.trim(),
+      zip:        document.getElementById("f-zip").value.trim(),
+      gate_code:  document.getElementById("f-gate").value.trim() || null,
+      dogs_count: dogs, service_frequency: freq, monthly_rate: rate,
+      start_date: startDate || null,
+      member_since: startDate || PS.fmt.today(),
+      service_status: document.getElementById("f-status").value,
+      billing_platform: document.getElementById("f-billing").value,
+      assigned_tech: document.getElementById("f-tech").value,
+      yard_notes: document.getElementById("f-yard").value.trim() || null,
+    };
+    if (!payload.name) return PS.toast("Name is required", "error");
+    const btn = document.getElementById("save-btn");
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      const created = await PS.api.insert("customers", payload);
+      const newCust = Array.isArray(created) ? created[0] : created;
+      if (startDate && newCust?.id) {
+        btn.textContent = "Generating schedule…";
+        const count = await generateSchedule(newCust.id, startDate, freq);
+        PS.toast(`Customer added! ${count} jobs scheduled.`);
+      } else {
+        PS.toast("Customer added!");
+      }
+      closeModal(); loadCustomers();
+    } catch (e) { PS.toast("Could not save: " + (e.message||e), "error"); }
+    btn.disabled = false; btn.textContent = "Save & Generate Schedule";
+  }
+
+  function exportCSV() {
+    if (!allCustomers.length) return PS.toast("Nothing to export", "info");
+    const headers = ["name","phone","email","address","city","zip","dogs_count","service_frequency","monthly_rate","service_status","assigned_tech","billing_platform","start_date","member_since"];
+    const rows = allCustomers.map(c => headers.map(h => JSON.stringify(c[h] ?? "")).join(","));
+    const csv = headers.join(",") + "\n" + rows.join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `poopsavvy-customers-${PS.fmt.today()}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  window.onAuthReady = loadCustomers;
+</script>
+</body>
+</html>

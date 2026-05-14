@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Poop Savvy — Schedule</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#0ea5e9">
+<link rel="stylesheet" href="app.css">
+<style>
+  .view-toggle { display: inline-flex; background: var(--accent-50); border-radius: 10px; padding: 3px; gap: 2px; }
+  .toggle-btn {
+    padding: 6px 16px; border-radius: 8px; font-size: 13px; font-weight: 700;
+    border: 0; background: transparent; color: var(--accent-600);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .toggle-btn.active { background: #fff; color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+  .cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .cal-nav h2 { font-size: 18px; font-weight: 800; color: var(--text); letter-spacing: -0.01em; }
+  .cal-nav-btns { display: flex; gap: 6px; }
+  .cal-wrap { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; box-shadow: var(--shadow-sm); }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+  .cal-header { display: grid; grid-template-columns: repeat(7, 1fr); background: var(--surface-2); border-bottom: 1px solid var(--border); }
+  .cal-day-name { text-align: center; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; padding: 10px 0; }
+  .cal-cell {
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    min-height: 100px; padding: 6px; position: relative;
+    transition: background 0.1s;
+  }
+  .cal-cell:hover { background: var(--surface-2); }
+  .cal-cell:nth-child(7n) { border-right: none; }
+  .cal-cell.other-month { background: #fafafa; }
+  .cal-cell.today { background: var(--accent-50); }
+  .cal-date { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; }
+  .cal-cell.today .cal-date {
+    background: var(--accent); color: #fff;
+    width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cal-event {
+    font-size: 10px; padding: 2px 6px; border-radius: 4px;
+    margin-bottom: 3px; cursor: pointer; overflow: hidden;
+    white-space: nowrap; text-overflow: ellipsis; font-weight: 600;
+  }
+  .cal-event.Scheduled { background: #dbeafe; color: #1e40af; }
+  .cal-event.Completed { background: var(--green-50); color: var(--green-700); }
+  .cal-event.Skipped { background: var(--amber-50); color: var(--amber-700); }
+  .cal-event.Cancelled { background: var(--red-50); color: var(--red-700); }
+  .cal-event.En { background: var(--amber-50); color: var(--amber-700); }
+  .cal-event.Arrived { background: var(--purple-50); color: var(--purple-700); }
+  .cal-more { font-size: 10px; color: var(--accent); cursor: pointer; font-weight: 700; padding: 0 2px; }
+  .day-visit {
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; margin-bottom: 8px;
+  }
+  .day-visit-name { font-weight: 700; font-size: 14px; color: var(--text); }
+  .day-visit-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .day-visit-actions { display: flex; gap: 5px; margin-top: 8px; flex-wrap: wrap; }
+  .act-btn {
+    font-size: 11px; padding: 5px 10px; border-radius: 6px;
+    border: 1px solid; background: #fff; font-weight: 700; cursor: pointer;
+  }
+  .act-btn.complete { color: var(--green-700); border-color: #a7f3d0; }
+  .act-btn.skip { color: var(--amber-700); border-color: #fde68a; }
+  .act-btn.edit { color: var(--accent); border-color: var(--accent-100); }
+  .act-btn.del { color: var(--red-700); border-color: #fecaca; }
+  @media (max-width: 700px) {
+    .cal-cell { min-height: 70px; padding: 4px; }
+    .cal-event { font-size: 9px; padding: 2px 4px; }
+    th:nth-child(4), td:nth-child(4) { display: none; }
+  }
+</style>
+</head>
+<body data-page="schedule">
+<nav class="app-nav" id="app-nav"></nav>
+
+<div class="container">
+  <div class="page-title">
+    <div>
+      <h1>Schedule</h1>
+      <div class="sub" id="sub">All visits past, present, and future</div>
+    </div>
+    <div class="page-actions">
+      <div class="view-toggle">
+        <button class="toggle-btn active" id="btn-list" onclick="setView('list')">📋 List</button>
+        <button class="toggle-btn" id="btn-cal" onclick="setView('calendar')">📅 Calendar</button>
+      </div>
+      <button class="btn btn-primary" onclick="openAddModal()">+ Add Visit</button>
+    </div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi accent"><div class="kpi-label">This Week</div><div class="kpi-val" id="s-week">—</div></div>
+    <div class="kpi green"><div class="kpi-label">Completed</div><div class="kpi-val" id="s-done">—</div></div>
+    <div class="kpi amber"><div class="kpi-label">Upcoming</div><div class="kpi-val" id="s-up">—</div></div>
+    <div class="kpi red"><div class="kpi-label">Skipped</div><div class="kpi-val" id="s-sk">—</div></div>
+  </div>
+
+  <!-- LIST VIEW -->
+  <div id="list-view">
+    <div class="toolbar">
+      <div class="search-wrap">
+        <input id="search" type="text" placeholder="Search customer…" oninput="onSearch(this.value)">
+        <button class="clear-btn" onclick="clearSearch()">×</button>
+      </div>
+      <select id="f-status" onchange="renderList()" style="padding:10px 12px;border:1px solid var(--border-strong);border-radius:8px;font-size:14px;">
+        <option value="">All Statuses</option>
+        <option>Scheduled</option><option>En Route</option><option>Arrived</option>
+        <option>Completed</option><option>Skipped</option><option>Cancelled</option>
+      </select>
+      <input type="date" id="f-from" onchange="renderList()" style="padding:10px 12px;border:1px solid var(--border-strong);border-radius:8px;font-size:14px;">
+      <input type="date" id="f-to" onchange="renderList()" style="padding:10px 12px;border:1px solid var(--border-strong);border-radius:8px;font-size:14px;">
+    </div>
+    <div class="card">
+      <div class="table-wrap" id="table-wrap"><div class="loading">Loading schedule…</div></div>
+    </div>
+  </div>
+
+  <!-- CALENDAR VIEW -->
+  <div id="cal-view" style="display:none;">
+    <div class="cal-nav">
+      <div class="cal-nav-btns">
+        <button class="btn btn-ghost btn-sm" onclick="changeMonth(-1)">‹ Prev</button>
+        <button class="btn btn-ghost btn-sm" onclick="goToday()">Today</button>
+        <button class="btn btn-ghost btn-sm" onclick="changeMonth(1)">Next ›</button>
+      </div>
+      <h2 id="cal-title">—</h2>
+    </div>
+    <div class="cal-wrap">
+      <div class="cal-header">
+        <div class="cal-day-name">Sun</div><div class="cal-day-name">Mon</div><div class="cal-day-name">Tue</div>
+        <div class="cal-day-name">Wed</div><div class="cal-day-name">Thu</div><div class="cal-day-name">Fri</div>
+        <div class="cal-day-name">Sat</div>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="overlay" id="modal-overlay">
+  <div class="modal">
+    <h2 id="modal-title">Add Visit</h2>
+    <div class="form-grid">
+      <div class="form-group form-full"><label>Customer *</label>
+        <select id="f-customer"><option value="">— Select customer —</option></select>
+      </div>
+      <div class="form-group"><label>Scheduled Date *</label><input id="f-date" type="date"></div>
+      <div class="form-group"><label>Status</label>
+        <select id="fm-status">
+          <option>Scheduled</option><option>Completed</option><option>Skipped</option><option>Cancelled</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Service Type</label><input id="f-service" type="text" value="Poop Scoop"></div>
+      <div class="form-group"><label>Completed Date</label><input id="f-completed" type="date"></div>
+      <div class="form-group form-full"><label>Notes</label><textarea id="f-notes" rows="2"></textarea></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="save-btn" onclick="saveVisit()">Save Visit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Day Detail Modal -->
+<div class="overlay" id="day-overlay">
+  <div class="modal">
+    <h2 id="day-title">Visits</h2>
+    <div id="day-list"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeDay()">Close</button>
+      <button class="btn btn-primary" onclick="closeDay(); openAddModal()">+ Add Visit</button>
+    </div>
+  </div>
+</div>
+
+<nav class="tab-bar" id="tab-bar"></nav>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="app.js"></script>
+<script>
+  let allVisits = [], allCustomers = [], editingId = null, searchQ = "", debounce;
+  let currentView = "list";
+  const now = new Date();
+  let calYear = now.getFullYear(), calMonth = now.getMonth();
+
+  function onSearch(v) {
+    clearTimeout(debounce);
+    document.querySelector(".search-wrap").classList.toggle("has-value", !!v);
+    debounce = setTimeout(() => { searchQ = v.trim().toLowerCase(); renderList(); }, 150);
+  }
+  function clearSearch() { document.getElementById("search").value=""; onSearch(""); }
+
+  // In tech mode, restrict everything to the selected tech's visits.
+  // Per-visit override (schedules.tech_name) wins; otherwise use the
+  // customer's master assignment (customers.assigned_tech).
+  function techFilter(visits) {
+    if (!window.PS?.view?.isTech?.()) return visits;
+    const t = (PS.view.tech() || "").toLowerCase();
+    if (!t) return visits;
+    return visits.filter(v => {
+      const n = (v.tech_name || v.customers?.assigned_tech || "").toLowerCase();
+      return n === t;
+    });
+  }
+
+  async function loadAll() {
+    try {
+      const [custs, visits] = await Promise.all([
+        PS.api.select("customers", "select=id,name,service_frequency,dogs_count,address,city,assigned_tech&order=name.asc"),
+        PS.api.select("schedules", "select=*,customers(name,address,city,dogs_count,service_frequency,assigned_tech)&order=scheduled_date.asc"),
+      ]);
+      allCustomers = custs || [];
+      allVisits = visits || [];
+      const sel = document.getElementById("f-customer");
+      sel.innerHTML = '<option value="">— Select customer —</option>' +
+        allCustomers.map(c => `<option value="${c.id}">${PS.fmt.escape(c.name||"")}</option>`).join("");
+      // Tech mode: hide the Add Visit button + note scope in the subtitle
+      if (PS.view?.isTech?.()) {
+        const add = document.querySelector(".page-actions .btn-primary");
+        if (add) add.style.display = "none";
+        const sub = document.getElementById("sub");
+        if (sub) sub.textContent = "Your stops — " + (PS.view.tech() || "tech");
+      }
+      updateStats();
+      if (currentView === "list") renderList(); else renderCalendar();
+    } catch (e) {
+      document.getElementById("table-wrap").innerHTML = `<div class="empty" style="padding:2rem;">Could not load schedule. ${PS.fmt.escape(e.message||"")}</div>`;
+    }
+  }
+
+  function updateStats() {
+    const today = PS.fmt.today();
+    const weekEnd = PS.fmt.addDateDays(today, 7);
+    const scoped = techFilter(allVisits);
+    document.getElementById("s-week").textContent = scoped.filter(v => v.scheduled_date >= today && v.scheduled_date <= weekEnd).length;
+    document.getElementById("s-done").textContent = scoped.filter(v => v.status === "Completed").length;
+    document.getElementById("s-up").textContent = scoped.filter(v => v.status === "Scheduled" && v.scheduled_date >= today).length;
+    document.getElementById("s-sk").textContent = scoped.filter(v => v.status === "Skipped").length;
+  }
+
+  function setView(v) {
+    currentView = v;
+    document.getElementById("list-view").style.display = v === "list" ? "" : "none";
+    document.getElementById("cal-view").style.display = v === "calendar" ? "" : "none";
+    document.getElementById("btn-list").classList.toggle("active", v === "list");
+    document.getElementById("btn-cal").classList.toggle("active", v === "calendar");
+    if (v === "calendar") renderCalendar();
+  }
+
+  function renderList() {
+    const fStatus = document.getElementById("f-status").value;
+    const fFrom = document.getElementById("f-from").value;
+    const fTo = document.getElementById("f-to").value;
+    const visits = techFilter(allVisits).filter(v => {
+      const name = (v.customers?.name || "").toLowerCase();
+      if (searchQ && !name.includes(searchQ)) return false;
+      if (fStatus && v.status !== fStatus) return false;
+      if (fFrom && v.scheduled_date < fFrom) return false;
+      if (fTo && v.scheduled_date > fTo) return false;
+      return true;
+    });
+    if (!visits.length) {
+      document.getElementById("table-wrap").innerHTML = `<div class="empty" style="padding:3rem;">No visits match.</div>`;
+      return;
+    }
+    const rows = visits.map(v => {
+      const c = v.customers || {};
+      const st = v.status || "Scheduled";
+      const completedStr = v.completed_date ? PS.fmt.date(v.completed_date) : "—";
+      return `<tr>
+        <td><a class="link" href="job-detail.html?id=${v.id}&from=schedule">${PS.fmt.date(v.scheduled_date)}</a></td>
+        <td><strong>${PS.fmt.escape(c.name||"—")}</strong><div class="sub-line">${(c.dogs_count||1)} dog${(c.dogs_count||1)>1?'s':''} · ${PS.fmt.escape(c.service_frequency||"")}</div></td>
+        <td>${PS.fmt.escape(v.service_type||"Poop Scoop")}</td>
+        <td style="font-size:12px;color:var(--text-muted);">${completedStr}</td>
+        <td><span class="badge badge-${st.replace(/\s/g,'')}">${st}</span></td>
+        <td><div class="actions" style="display:flex;gap:4px;flex-wrap:wrap;">
+          ${st === "Scheduled" ? `<button class="act-btn complete" onclick="quick('${v.id}','Completed')">✓ Done</button>` : ""}
+          ${st === "Scheduled" ? `<button class="act-btn skip" onclick="quick('${v.id}','Skipped')">Skip</button>` : ""}
+          <button class="act-btn edit" onclick="window.location='job-detail.html?id=${v.id}&from=schedule'">View</button>
+          <button class="act-btn del" onclick="del('${v.id}')">Del</button>
+        </div></td>
+      </tr>`;
+    }).join("");
+    document.getElementById("table-wrap").innerHTML = `
+      <table class="t">
+        <thead><tr><th>Date</th><th>Customer</th><th>Service</th><th>Completed</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  function renderCalendar() {
+    const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    document.getElementById("cal-title").textContent = `${months[calMonth]} ${calYear}`;
+    const firstDay = new Date(calYear, calMonth, 1).getDay();
+    const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+    const daysInPrev = new Date(calYear, calMonth, 0).getDate();
+    const todayStr = PS.fmt.today();
+    const visitMap = {};
+    techFilter(allVisits).forEach(v => { if (v.scheduled_date) { if (!visitMap[v.scheduled_date]) visitMap[v.scheduled_date] = []; visitMap[v.scheduled_date].push(v); } });
+    let cells = "";
+    for (let i = firstDay - 1; i >= 0; i--) {
+      const d = daysInPrev - i;
+      cells += `<div class="cal-cell other-month"><div class="cal-date">${d}</div></div>`;
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      const ds = `${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+      const isToday = ds === todayStr;
+      const dayV = visitMap[ds] || [];
+      let html = dayV.slice(0,3).map(v => {
+        const name = v.customers?.name || "Visit";
+        const st = (v.status||"Scheduled").split(" ")[0];
+        return `<div class="cal-event ${st}" onclick="openDay('${ds}')" title="${PS.fmt.escape(name)} — ${v.status||""}">${PS.fmt.escape(name)}</div>`;
+      }).join("");
+      if (dayV.length > 3) html += `<div class="cal-more" onclick="openDay('${ds}')">+${dayV.length-3} more</div>`;
+      cells += `<div class="cal-cell${isToday?" today":""}">
+        <div class="cal-date">${d}</div>${html}</div>`;
+    }
+    const total = firstDay + daysInMonth;
+    const remaining = total % 7 === 0 ? 0 : 7 - (total % 7);
+    for (let d = 1; d <= remaining; d++) cells += `<div class="cal-cell other-month"><div class="cal-date">${d}</div></div>`;
+    document.getElementById("cal-grid").innerHTML = cells;
+  }
+
+  function changeMonth(dir) {
+    calMonth += dir;
+    if (calMonth > 11) { calMonth = 0; calYear++; }
+    if (calMonth < 0) { calMonth = 11; calYear--; }
+    renderCalendar();
+  }
+  function goToday() { calYear = now.getFullYear(); calMonth = now.getMonth(); renderCalendar(); }
+
+  function openDay(ds) {
+    const visits = techFilter(allVisits).filter(v => v.scheduled_date === ds);
+    document.getElementById("day-title").textContent = `Visits — ${PS.fmt.dateLong(ds)}`;
+    if (!visits.length) {
+      document.getElementById("day-list").innerHTML = `<div class="empty" style="padding:1.5rem;">No visits this day.</div>`;
+    } else {
+      document.getElementById("day-list").innerHTML = visits.map(v => {
+        const name = v.customers?.name || "—";
+        const st = v.status || "Scheduled";
+        return `<div class="day-visit">
+          <div class="day-visit-name">${PS.fmt.escape(name)} <span class="badge badge-${st.replace(/\s/g,'')}">${st}</span></div>
+          <div class="day-visit-sub">${PS.fmt.escape(v.service_type||"Poop Scoop")}${v.notes?" · "+PS.fmt.escape(v.notes):""}</div>
+          <div class="day-visit-actions">
+            ${st === "Scheduled" ? `<button class="act-btn complete" onclick="quick('${v.id}','Completed');closeDay();">✓ Done</button>` : ""}
+            ${st === "Scheduled" ? `<button class="act-btn skip" onclick="quick('${v.id}','Skipped');closeDay();">Skip</button>` : ""}
+            <button class="act-btn edit" onclick="closeDay();window.location='job-detail.html?id=${v.id}&from=schedule'">Open</button>
+            <button class="act-btn del" onclick="del('${v.id}');closeDay();">Del</button>
+          </div>
+        </div>`;
+      }).join("");
+    }
+    document.getElementById("f-date").value = ds;
+    document.getElementById("day-overlay").classList.add("open");
+  }
+  function closeDay() { document.getElementById("day-overlay").classList.remove("open"); }
+
+  function openAddModal() {
+    editingId = null;
+    document.getElementById("modal-title").textContent = "Add Visit";
+    document.getElementById("save-btn").textContent = "Save Visit";
+    document.getElementById("f-customer").value = "";
+    document.getElementById("f-date").value = PS.fmt.today();
+    document.getElementById("fm-status").value = "Scheduled";
+    document.getElementById("f-service").value = "Poop Scoop";
+    document.getElementById("f-completed").value = "";
+    document.getElementById("f-notes").value = "";
+    document.getElementById("modal-overlay").classList.add("open");
+    setTimeout(() => document.getElementById("f-customer").focus(), 60);
+  }
+  function closeModal() { document.getElementById("modal-overlay").classList.remove("open"); }
+  document.getElementById("modal-overlay").addEventListener("click", e => { if (e.target === e.currentTarget) closeModal(); });
+  document.getElementById("day-overlay").addEventListener("click", e => { if (e.target === e.currentTarget) closeDay(); });
+
+  async function saveVisit() {
+    const cid = document.getElementById("f-customer").value;
+    const d = document.getElementById("f-date").value;
+    if (!cid) return PS.toast("Select a customer", "error");
+    if (!d) return PS.toast("Select a date", "error");
+    const payload = {
+      customer_id: cid,
+      scheduled_date: d,
+      status: document.getElementById("fm-status").value,
+      service_type: document.getElementById("f-service").value.trim() || "Poop Scoop",
+      completed_date: document.getElementById("f-completed").value || null,
+      notes: document.getElementById("f-notes").value.trim() || null,
+    };
+    const btn = document.getElementById("save-btn");
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      if (editingId) await PS.api.patch("schedules", `id=eq.${editingId}`, payload);
+      else await PS.api.insertMinimal("schedules", payload);
+      PS.toast(editingId ? "Updated" : "Added");
+      closeModal(); loadAll();
+    } catch (e) { PS.toast("Save failed", "error"); }
+    btn.disabled = false; btn.textContent = editingId ? "Update Visit" : "Save Visit";
+  }
+
+  async function quick(id, status) {
+    const patch = { status };
+    if (status === "Completed") patch.completed_date = PS.fmt.today();
+    try {
+      await PS.api.patch("schedules", `id=eq.${id}`, patch);
+      const v = allVisits.find(x => x.id === id); if (v) { Object.assign(v, patch); }
+      updateStats();
+      if (currentView === "list") renderList(); else renderCalendar();
+      PS.toast(status === "Completed" ? "✓ Marked complete" : "Skipped");
+    } catch (e) { PS.toast("Update failed", "error"); }
+  }
+
+  async function del(id) {
+    if (!confirm("Delete this visit?")) return;
+    try {
+      await PS.api.delete("schedules", `id=eq.${id}`);
+      allVisits = allVisits.filter(v => v.id !== id);
+      updateStats();
+      if (currentView === "list") renderList(); else renderCalendar();
+      PS.toast("Deleted");
+    } catch (e) { PS.toast("Delete failed", "error"); }
+  }
+
+  window.onAuthReady = loadAll;
+</script>
+</body>
+</html>
